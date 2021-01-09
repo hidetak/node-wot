@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2019 Contributors to the Eclipse Foundation
+ * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
  * 
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -21,8 +21,13 @@ import { default as Servient } from "./servient";
 export default Servient;
 export { Servient };
 
-// ContentSerdes
+// ContentSerdes + built-in codecs
 export * from "./content-serdes";
+export { default as JsonCodec } from "./codecs/json-codec";
+export { default as TextCodec } from "./codecs/text-codec";
+export { default as Base64Codec } from "./codecs/base64-codec";
+export { default as NetconfOctetstreamCodecCodec } from "./codecs/octetstream-codec";
+export { default as NetconfCodec } from "./codecs/netconf-codec";
 
 // Protocols & Content
 export * from "./protocol-interfaces";
@@ -34,3 +39,4 @@ export { default as ExposedThing } from "./exposed-thing";
 
 // Helper Implementations
 export { default as Helpers } from "./helpers";
+export { default as ProtocolHelpers } from "./protocol-helpers";

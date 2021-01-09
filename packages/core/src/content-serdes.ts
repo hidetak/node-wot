@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2019 Contributors to the Eclipse Foundation
+ * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
  * 
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -16,6 +16,7 @@
 import { Content } from "./protocol-interfaces";
 import JsonCodec from "./codecs/json-codec";
 import TextCodec from "./codecs/text-codec";
+import Base64Codec from "./codecs/base64-codec";
 import OctetstreamCodec from "./codecs/octetstream-codec";
 import * as TD from "@node-wot/td-tools";
 
@@ -44,9 +45,21 @@ export class ContentSerdes {
   public static get(): ContentSerdes {
     if (!this.instance) {
       this.instance = new ContentSerdes();
+      // JSON
       this.instance.addCodec(new JsonCodec(), true);
       this.instance.addCodec(new JsonCodec("application/senml+json"));
+      // Text
       this.instance.addCodec(new TextCodec());
+      this.instance.addCodec(new TextCodec("text/html"));
+      this.instance.addCodec(new TextCodec("text/css"));
+      this.instance.addCodec(new TextCodec("application/xml"));
+      this.instance.addCodec(new TextCodec("application/xhtml+xml"));
+      this.instance.addCodec(new TextCodec("image/svg+xml"));
+      // Base64
+      this.instance.addCodec(new Base64Codec("image/png"));
+      this.instance.addCodec(new Base64Codec("image/gif"));
+      this.instance.addCodec(new Base64Codec("image/jpeg"));
+      // OctetStream
       this.instance.addCodec(new OctetstreamCodec());
     }
     return this.instance;
@@ -107,7 +120,7 @@ export class ContentSerdes {
 
     // choose codec based on mediaType
     if (this.codecs.has(mt)) {
-      console.debug(`ContentSerdes deserializing from ${content.type}`);
+      console.debug("[core/content-senders]",`ContentSerdes deserializing from ${content.type}`);
 
       let codec = this.codecs.get(mt)
 
@@ -117,14 +130,14 @@ export class ContentSerdes {
       return res;
 
     } else {
-      console.warn(`ContentSerdes passthrough due to unsupported media type '${mt}'`);
+      console.warn("[core/content-senders]",`ContentSerdes passthrough due to unsupported media type '${mt}'`);
       return content.body.toString();
     }
   }
 
   public valueToContent(value: any, schema: TD.DataSchema, contentType = ContentSerdes.DEFAULT): Content {
 
-    if (value === undefined) console.warn("ContentSerdes valueToContent got no value");
+    if (value === undefined) console.warn("[core/content-senders]","ContentSerdes valueToContent got no value");
 
     let bytes = null;
 
@@ -134,11 +147,11 @@ export class ContentSerdes {
 
     // choose codec based on mediaType
     if (this.codecs.has(mt)) {
-      console.debug(`ContentSerdes serializing to ${contentType}`);
+      console.debug("[core/content-senders]",`ContentSerdes serializing to ${contentType}`);
       let codec = this.codecs.get(mt);
       bytes = codec.valueToBytes(value, schema, par);
     } else {
-      console.warn(`ContentSerdes passthrough due to unsupported serialization format '${contentType}'`);
+      console.warn("[core/content-senders]",`ContentSerdes passthrough due to unsupported serialization format '${contentType}'`);
       bytes = Buffer.from(value);
     }
 

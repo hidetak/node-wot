@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2019 Contributors to the Eclipse Foundation
+ * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
  * 
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -67,7 +67,7 @@ class HttpServerTest {
 
     await httpServer.expose(testThing);
 
-    let uri = `http://localhost:${httpServer.getPort()}/Test/`;
+    let uri = `http://localhost:${httpServer.getPort()}/test/`;
     let body;
 
     console.log("Testing", uri);
@@ -106,11 +106,152 @@ class HttpServerTest {
 
     let uri = `http://localhost:${httpServer1.getPort()}/`;
 
-    rp.get(uri).then(async body => {
-      expect(body).to.equal("One");
+    return rp.get(uri).then(async body => {
+      expect(body).to.equal("[]");
 
       await httpServer1.stop();
       await httpServer2.stop();
     });
   }
+
+  // https://github.com/eclipse/thingweb.node-wot/issues/181
+  @test async "should start and stop a server with no security"() {
+    let httpServer = new HttpServer({ port: 58080, security: {scheme: "nosec"}});
+
+    await httpServer.start(null);
+    expect(httpServer.getPort()).to.eq(58080); // port test
+    expect(httpServer.getHttpSecurityScheme()).to.eq("NoSec"); // HTTP security scheme test (nosec -> NoSec)
+    await httpServer.stop();
+  }
+
+  // https://github.com/eclipse/thingweb.node-wot/issues/181
+  @test async "should not override a valid security scheme"() {
+    let httpServer = new HttpServer({
+      port: 58081, 
+      serverKey : "./test/server.key",
+      serverCert: "./test/server.cert",
+      security: {
+        scheme: "bearer"
+      }
+    });
+    await httpServer.start(null);
+    let testThing = new ExposedThing(null);
+    testThing.title = "Test";
+    testThing.securityDefinitions = {
+      "bearer" : {
+        scheme:"bearer"
+      }
+    }
+    httpServer.expose(testThing,{});
+    await httpServer.stop()
+
+    expect(testThing.securityDefinitions["bearer"]).not.to.be.undefined;
+  }
+
+  @test async "should not accept an unsupported scheme"() {
+    console.log("START SHOULD")
+    let httpServer = new HttpServer({
+      port: 58081, 
+      serverKey: "./test/server.key",
+      serverCert: "./test/server.cert",
+      security: {
+        scheme: "bearer"
+      }
+    });
+    await httpServer.start(null);
+    
+    let testThing = new ExposedThing(null);
+    testThing.title = "Test";
+    testThing.securityDefinitions = {
+      "oauth2" : {
+        scheme:"oauth2"
+      }
+    }
+
+    expect(() => { httpServer.expose(testThing, {});}).throw()
+    await httpServer.stop();
+
+  }
+
+  @test async "config.port is overriden by WOT_PORT or PORT"() {
+
+    // Works when none set
+    let httpServer = new HttpServer({ port: 58080 });
+    await httpServer.start(null);
+    expect(httpServer.getPort()).to.eq(58080); // WOT PORT from test
+    await httpServer.stop();
+
+    // Check PORT
+    process.env.PORT='2222'
+    httpServer = new HttpServer({ port: 58080 });
+    await httpServer.start(null);
+    expect(httpServer.getPort()).to.eq(2222); // from PORT
+    await httpServer.stop();
+
+    // CHECK WOT_PORT
+    process.env.PORT=undefined
+    process.env.WOT_PORT='3333'
+    httpServer = new HttpServer({ port: 58080 });
+    await httpServer.start(null);
+    expect(httpServer.getPort()).to.eq(3333); // WOT PORT from test
+    await httpServer.stop();
+
+    // Check WOT_PORT has higher priority than PORT
+    process.env.PORT='2600'
+    process.env.WOT_PORT='1337'
+    httpServer = new HttpServer({ port: 58080 });
+    await httpServer.start(null);
+    expect(httpServer.getPort()).to.eq(1337); // WOT PORT from test
+    await httpServer.stop();
+    delete process.env.PORT
+    delete process.env.WOT_PORT
+  }
+
+  @test async "should allow HttpServer baseUri to specify url prefix for proxied/gateswayed/buildpack etc "() {
+
+    let theHostname = "wot.w3c.loopback.site:8080";
+    let theBasePath= '/things'
+    let theBaseUri = `http://${theHostname}${theBasePath}`;
+    let httpServer = new HttpServer({
+      baseUri: theBaseUri,
+      port: 8080
+    });
+
+    await httpServer.start(null);
+
+    let testThing = new ExposedThing(null);
+    testThing = Helpers.extend({
+      title: "Smart Coffee Machine",
+      properties: {
+        maintenanceNeeded: {
+          type: "string"
+        }
+      },
+      actions: {
+        makeDrink: {
+          output: {type: "string"}
+        }
+      }
+    }, testThing);
+    testThing.extendInteractions();
+    testThing.properties.maintenanceNeeded.forms = [];
+    testThing.actions.makeDrink.forms = [];
+
+    const td = testThing.getThingDescription()
+
+    await httpServer.expose(testThing);
+
+    let uri = 'http://localhost:8080/smart-coffee-machine' //theBase.concat('/')
+    let body;
+
+    body = await rp.get(uri);
+    //console.debug(JSON.stringify(JSON.parse(body),undefined,2))
+
+    var expected_url = `${theBaseUri}/smart-coffee-machine/actions/makeDrink`
+
+    expect(body).to.include(expected_url);
+    console.log(`Found URL ${expected_url} in TD`)
+
+  }
+
 }

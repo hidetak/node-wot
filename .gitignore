@@ -55,10 +55,22 @@ packages/*
 !packages/binding-coap
 !packages/binding-websockets
 !packages/binding-mqtt
+!packages/binding-modbus
 !packages/binding-oracle
 !packages/binding-fujitsu
 !packages/binding-opcua
 !packages/binding-netconf
+!packages/binding-modbus
+!packages/binding-wotfirestore
 !packages/cli
 !packages/browser-bundle
 !packages/examples
+!packages/wot-agent
+!packages/wot-console
+
+# JetBrains IDEs
+.idea/
+
+# hidetak
+hidetak-tools/
+packages/binding-wotfirestore/tmp/

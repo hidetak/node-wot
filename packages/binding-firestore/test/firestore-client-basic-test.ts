@@ -66,7 +66,8 @@ class FirestoreClientBasicTest {
 
         const wotHelper = new Helpers(servient);
         try {
-            const td = await wotHelper.fetch(`firestore://${firestoreConfig.hostName}/test-thing`);
+            const tdStr = await wotHelper.fetch(`firestore://${firestoreConfig.hostName}/test-thing`);
+            const td = JSON.parse(tdStr as string);
             try {
                 const WoT = await servient.start();
                 thing = await WoT.consume(td as ThingDescription);

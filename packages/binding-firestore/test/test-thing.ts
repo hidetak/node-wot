@@ -63,7 +63,11 @@ export const launchTestThing = async (): Promise<WoT.ExposedThing | void> => {
         const thing = await WoT.produce({
             title: "test-thing",
             description: "thing for test",
-            "@context": ["https://www.w3.org/2019/wot/td/v1", { iot: "http://example.org/iot" }],
+            "@context": [
+                "https://www.w3.org/2019/wot/td/v1",
+                "https://www.w3.org/2022/wot/td/v1.1",
+                { iot: "http://example.org/iot" },
+            ],
             properties: {
                 objectProperty: {
                     type: "object",

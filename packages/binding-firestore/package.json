@@ -10,9 +10,9 @@
     "scripts": {
         "build": "tsc -b",
         "rebuild": "tsc -b && npm rebuild --unsafe-perm --build-from-source",
-        "test": "firebase emulators:exec -c test/firebase.json \"npm run fbemutest\" && kill-port 4000 8088 9099",
+        "test": "firebase emulators:exec --debug -c test/firebase.json \"npm run fbemutest\" && kill-port 4000 8088 9099",
         "fbemutest": "mocha --require ts-node/register test/**/*.ts --timeout 60000 --exit",
-        "onlystartemu": "firebase emulators:start -c test/firebase.json",
+        "onlystartemu": "firebase emulators:start --debug -c test/firebase.json",
         "codestyle": "standard --pretty",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
@@ -24,7 +24,7 @@
         "@node-wot/core": "0.8.7",
         "@node-wot/td-tools": "0.8.7",
         "buffer": "^5.5.0",
-        "firebase": "9.7.0",
+        "firebase": "9.21.0",
         "uuid": "^7.0.3"
     },
     "devDependencies": {
@@ -36,7 +36,7 @@
         "chai": "^4.3.4",
         "chai-as-promised": "^7.1.1",
         "firebase-admin": "^9.9.0",
-        "firebase-tools": "^9.17.0",
+        "firebase-tools": "^12.0.0",
         "kill-port": "^1.6.1",
         "mocha": "^9.2.2",
         "sinon": "11.1.1",

@@ -18,8 +18,7 @@ import FirestoreServer from "../src/firestore-server";
 import FirestoreCodec from "../src/codecs/firestore-codec";
 import firebase from "firebase/compat/app";
 
-//import firestoreConfig from "./firestore-config.json";
-const firestoreConfig = require("./firestore-config.json");
+import * as firestoreConfig from "./firestore-config.json";
 
 const { debug, info, error } = createLoggers("binding-firestore", "test-thing");
 

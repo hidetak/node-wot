@@ -140,7 +140,7 @@ class FirestoreClientBasicTest {
 
     @test async "[client] action about number"() {
         const v = await thing.invokeAction("actionNum", 123);
-        let num = await v?.value();
+        const num = await v?.value();
         console.log("---------- num", num);
         assert.equal(num, 123);
     }

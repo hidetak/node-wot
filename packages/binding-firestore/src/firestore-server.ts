@@ -93,7 +93,7 @@ export default class FirestoreServer implements ProtocolServer {
     }
 
     public getHostName(): string {
-        return this.fbConfig?.hostName || process.env.WoTHostName || os.hostname();
+        return this.fbConfig?.hostName ?? process.env.WoTHostName ?? os.hostname();
     }
 
     public getPort(): number {
@@ -150,21 +150,21 @@ export default class FirestoreServer implements ProtocolServer {
 
             const href = this.FIRESTORE_HREF_BASE + topic;
             const form = new TD.Form(href, this.DEFAULT_CONTENT_TYPE);
-            if (thing.properties[propertyName].readOnly) {
+            if (thing.properties[propertyName].readOnly === true) {
                 form.op = ["readproperty"];
-            } else if (thing.properties[propertyName].writeOnly) {
+            } else if (thing.properties[propertyName].writeOnly === true) {
                 form.op = ["writeproperty"];
             } else {
                 form.op = ["readproperty", "writeproperty"];
             }
-            if (thing.properties[propertyName].observable) {
+            if (thing.properties[propertyName].observable === true) {
                 form.op.push("observeproperty");
                 form.op.push("unobserveproperty");
             }
             thing.properties[propertyName].forms.push(form);
             debug(`FirestoreServer at ${this.FIRESTORE_HREF_BASE} assigns '${href}' to property '${propertyName}'`);
 
-            if (thing.properties[propertyName].observable) {
+            if (thing.properties[propertyName].observable === true) {
                 debug(
                     `FirestoreServer on port ${this.getPort()} assigns '${href}' to observable Property '${propertyName}'`
                 );
@@ -191,7 +191,7 @@ export default class FirestoreServer implements ProtocolServer {
                     this.firestoreObservers,
                     propertyWriteReqTopic,
                     async (err, content: Content | undefined, reqId) => {
-                        if (err) {
+                        if (err != null) {
                             error(`failed to receive property (${propertyName}): ${err}`);
                             return;
                         }
@@ -224,7 +224,7 @@ export default class FirestoreServer implements ProtocolServer {
                 this.firestoreObservers,
                 propertyReadReqTopic,
                 async (err, content: Content | undefined, reqId) => {
-                    if (err) {
+                    if (err != null) {
                         error(`failed to receive read request (${propertyName}): ${err}`);
                         return;
                     }
@@ -268,14 +268,14 @@ export default class FirestoreServer implements ProtocolServer {
                 this.firestoreObservers,
                 topic,
                 async (err, content: Content | undefined, reqId?: string) => {
-                    if (err) {
+                    if (err != null) {
                         error(`failed to receive action(${actionName}): ${err}`);
                         return;
                     }
                     debug(`FirestoreServer at ${this.getHostName()} received message for '${topic}'`);
-                    if (thing) {
+                    if (thing != null) {
                         const action = thing.actions[actionName];
-                        if (action) {
+                        if (action != null) {
                             const options: WoT.InteractionOptions & { formIndex: number } = {
                                 formIndex: ProtocolHelpers.findRequestMatchingFormIndex(
                                     action.forms,

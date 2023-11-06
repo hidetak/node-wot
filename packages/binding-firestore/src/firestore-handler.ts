@@ -22,8 +22,9 @@ import { BindingFirestoreConfig } from "./firestore";
 
 const { debug, error } = createLoggers("binding-firestore", "firestore-handler");
 
-let firebase: typeof Firebase;
-
+/*
+// Code for browser compatibility
+const firebase: typeof Firebase;
 if (Firebase.apps) {
     // for NodeJS
     firebase = Firebase;
@@ -31,6 +32,9 @@ if (Firebase.apps) {
     // for Web browser (We'll deal with it later.)
     firebase = window.firebase as unknown as typeof Firebase;
 }
+*/
+// only for nodejs
+const firebase = Firebase;
 
 type Firestore = Firebase.firestore.Firestore;
 
@@ -43,7 +47,7 @@ export const initFirestore = async (fbConfig: BindingFirestoreConfig, fstore?: F
     }
     if (!firebase.apps.length) {
         // initialize firestore if initialize not yet.
-        firebase.initializeApp(fbConfig.firebaseConfig as Object);
+        firebase.initializeApp(fbConfig.firebaseConfig as object);
     }
     // Sign In
     const currentUser = await new Promise((resolve, reject) => {
@@ -51,15 +55,14 @@ export const initFirestore = async (fbConfig: BindingFirestoreConfig, fstore?: F
             resolve(user);
         });
     });
-    if (!currentUser) {
-        if (!fbConfig || !fbConfig.user || !fbConfig.user.email || !fbConfig.user.password) {
+    if (currentUser == null) {
+        if (fbConfig.user == null || fbConfig.user.email == null || fbConfig.user.password == null) {
             throw new Error("firebase auth error: cannot find email/password");
         }
         const firestore = await new Promise((resolve, reject) => {
             firebase
                 .auth()
-                //@ts-ignore
-                .signInWithEmailAndPassword(fbConfig.user.email, fbConfig.user.password)
+                .signInWithEmailAndPassword(fbConfig?.user?.email as string, fbConfig?.user?.password as string)
                 .then(() => {
                     const firestore = firebase.firestore();
                     resolve(firestore);
@@ -83,7 +86,7 @@ export const writeDataToFirestore = async (
     debug(`writeDataToFirestore topic: ${topic}, value: ${content}, reqId: ${reqId}`);
     const ref = firestore.collection("things").doc(encodeURIComponent(topic));
     const data = { updatedTime: Date.now(), reqId, content: "" };
-    if (content && content.body) {
+    if (content != null && content.body != null) {
         if (content.body instanceof Readable) {
             const body = await content.toBuffer();
             const contentForWrite = { type: content.type, body };
@@ -117,15 +120,17 @@ export const readDataFromFirestore = async (firestore: Firestore, topic: string)
             const data = doc.data();
             let content: Content | undefined;
             debug(`readDataToFirestore got data: ${data}`);
-            if (data && data.content) {
+            if (data != null && data.content != null) {
                 // XXX TODO change the way content is reported
                 const obj = JSON.parse(data.content);
-                if (!obj) {
+                if (obj == null) {
                     throw new Error(`invalid ${topic} content:${content}`);
                 }
                 content = new Content(
                     obj.type,
-                    obj && obj.body && obj.body.type === "Buffer" ? Readable.from(obj.body.data) : Readable.from("")
+                    obj != null && obj.body != null && obj.body.type === "Buffer"
+                        ? Readable.from(obj.body.data)
+                        : Readable.from("")
                 );
             }
             return content;
@@ -155,10 +160,10 @@ export const subscribeToFirestore = async (
             // If reqId is included and Topic contains actionResults,
             // return the value regardless of whether it is the first acquisition because it is a return value.
             const dividedTopic = topic.split("/");
-            if (data?.reqId) {
+            if (data?.reqId != null) {
                 reqId = data.reqId;
                 if (
-                    dividedTopic &&
+                    dividedTopic != null &&
                     dividedTopic.length > 2 &&
                     (dividedTopic[2] === "actionResults" || dividedTopic[2] === "propertyReadResults")
                 ) {
@@ -172,13 +177,13 @@ export const subscribeToFirestore = async (
             }
 
             let content: Content | undefined;
-            if (data?.content) {
+            if (data?.content != null) {
                 const obj = JSON.parse(data.content);
-                if (!obj) {
+                if (obj == null) {
                     callback(Error(`invalid ${topic} content: ${content}`), undefined, reqId);
                     return;
                 }
-                const buf = Buffer.from(obj?.body?.data || []);
+                const buf = Buffer.from(obj?.body?.data ?? []);
                 content = new Content(obj.type, obj?.body?.type === "Buffer" ? Readable.from(buf) : Readable.from(""));
             }
             callback(null, content, reqId);
@@ -194,7 +199,7 @@ export const subscribeToFirestore = async (
 export const unsubscribeToFirestore = (firestoreObservers: { [key: string]: () => void }, topic: string): void => {
     debug(`unsubscribeToFirestore topic: ${topic}`);
     const observer = firestoreObservers[topic];
-    if (observer) {
+    if (observer != null) {
         observer();
     }
 };
@@ -219,7 +224,7 @@ export const writeMetaDataToFirestore = async (
     const data = { updatedTime: Date.now(), content: "" };
     try {
         const ref = firestore.collection("hostsMetaData").doc(hostName);
-        if (content) {
+        if (content != null) {
             data.content = JSON.stringify(content);
         }
         const value = await ref.set(data);
@@ -241,7 +246,7 @@ export const readMetaDataFromFirestore = async (
         const doc = await ref.get();
         if (doc.exists) {
             const data = doc.data();
-            if (data?.content) {
+            if (data?.content != null) {
                 const content = JSON.parse(data.content);
                 return content.body;
             } else {
@@ -264,7 +269,6 @@ export const removeMetaDataFromFirestore = async (firestore: Firestore, hostName
         const ref = firestore.collection("hostsMetaData").doc(hostName);
         await ref.delete();
         debug(`removed hostName: ${hostName}`);
-        return;
     } catch (err) {
         error(`error removing hostName: ${hostName}, error: ${err}`);
         throw err;

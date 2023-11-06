@@ -70,11 +70,11 @@ export default class FirestoreClient implements ProtocolClient {
         const resource = paths[3];
         const topic = splittedHref[1];
         const ret = {
-            hostName: hostName,
-            name: name,
-            topic: topic,
-            type: type,
-            resource: resource,
+            hostName,
+            name,
+            topic,
+            type,
+            resource,
         };
         return ret;
     }
@@ -121,7 +121,7 @@ export default class FirestoreClient implements ProtocolClient {
                     }
                     unsubscribeToFirestore(this.firestoreObservers, propertyReadResultTopic);
                     clearTimeout(timeoutId);
-                    if (err) {
+                    if (err != null) {
                         logError(`failed to get reading property result: ${err}`);
                         reject(err);
                     } else {
@@ -144,7 +144,7 @@ export default class FirestoreClient implements ProtocolClient {
         const firestore = await initFirestore(this.fbConfig as BindingFirestoreConfig, this.firestore);
         this.firestore = firestore;
         const splittedTopic = pointerInfo.topic.split("/");
-        if (splittedTopic && splittedTopic[2] === "properties") {
+        if (splittedTopic[2] === "properties") {
             splittedTopic[2] = "propertyWriteReq";
             pointerInfo.topic = splittedTopic.join("/");
         }
@@ -176,7 +176,7 @@ export default class FirestoreClient implements ProtocolClient {
                     }
                     unsubscribeToFirestore(this.firestoreObservers, actionResultTopic);
                     clearTimeout(timeoutId);
-                    if (err) {
+                    if (err != null) {
                         logError(`failed to get action result: ${err}`);
                         reject(err);
                     } else {
@@ -224,7 +224,7 @@ export default class FirestoreClient implements ProtocolClient {
                         this.firestoreObservers,
                         pointerInfo.topic,
                         (err: string | Error | null, content) => {
-                            if (err) {
+                            if (err != null) {
                                 logError(`failed to subscribe resource: ${err}`);
                                 if (error) {
                                     error(err as Error);

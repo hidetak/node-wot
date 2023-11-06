@@ -144,7 +144,7 @@ export default class FirestoreServer implements ProtocolServer {
             const property = thing.properties[propertyName];
             info(`properties topic: ${topic}`);
 
-            if (!name) {
+            if (name == null) {
                 name = "no_name";
             }
 

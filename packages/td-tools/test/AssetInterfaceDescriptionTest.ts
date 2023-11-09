@@ -264,16 +264,24 @@ class AssetInterfaceDescriptionUtilTest {
                 hasEndpointMetadata = true;
                 const endpointMetadata = smValue;
                 expect(endpointMetadata).to.have.property("value").to.be.an("array").to.have.lengthOf.greaterThan(0);
+                let hasBase = false;
                 let hasSecurity = false;
                 let hasSecurityDefinitions = false;
                 for (const endpointMetadataValue of endpointMetadata.value) {
-                    if (endpointMetadataValue.idShort === "security") {
+                    if (endpointMetadataValue.idShort === "base") {
+                        hasBase = true;
+                        expect(endpointMetadataValue.value).to.equal("modbus+tcp://192.168.178.146:502/");
+                    } else if (endpointMetadataValue.idShort === "security") {
                         hasSecurity = true;
                         expect(endpointMetadataValue)
                             .to.have.property("value")
                             .to.be.an("array")
                             .to.have.lengthOf.greaterThan(0);
-                        expect(endpointMetadataValue.value[0].value).to.equal("nosec_sc");
+                        expect(endpointMetadataValue.value[0]).to.have.property("value");
+                        const modelReferenceValue = endpointMetadataValue.value[0].value;
+                        expect(modelReferenceValue).to.have.property("type").to.equal("ModelReference");
+                        expect(modelReferenceValue).to.have.property("keys").to.be.an("array").to.have.lengthOf(5);
+                        expect(modelReferenceValue.keys[4]).to.have.property("value").to.equal("nosec_sc");
                     } else if (endpointMetadataValue.idShort === "securityDefinitions") {
                         hasSecurityDefinitions = true;
                         expect(endpointMetadataValue)
@@ -301,6 +309,7 @@ class AssetInterfaceDescriptionUtilTest {
                         expect(hasBasicSC).to.equal(true);
                     }
                 }
+                expect(hasBase).to.equal(true);
                 expect(hasSecurity).to.equal(true);
                 expect(hasSecurityDefinitions).to.equal(true);
             }
@@ -358,9 +367,7 @@ class AssetInterfaceDescriptionUtilTest {
                                         for (const formEntry of propProperty.value) {
                                             if (formEntry.idShort === "href") {
                                                 hasHref = true;
-                                                expect(formEntry.value).to.equal(
-                                                    "modbus+tcp://192.168.178.146:502/1/40020?quantity=16"
-                                                );
+                                                expect(formEntry.value).to.equal("1/40020?quantity=16");
                                             } else if (formEntry.idShort === "op") {
                                                 hasOp = true;
                                                 expect(formEntry.value).to.equal("readproperty");
@@ -425,9 +432,7 @@ class AssetInterfaceDescriptionUtilTest {
                                         for (const formEntry of propProperty.value) {
                                             if (formEntry.idShort === "href") {
                                                 hasHref = true;
-                                                expect(formEntry.value).to.equal(
-                                                    "modbus+tcp://192.168.178.146:502/40361?quantity=1"
-                                                );
+                                                expect(formEntry.value).to.equal("40361?quantity=1"); // use base
                                             } else if (formEntry.idShort === "op") {
                                                 hasOp = true;
                                                 expect(formEntry.value).to.equal("readproperty");
@@ -471,6 +476,7 @@ class AssetInterfaceDescriptionUtilTest {
     td1: ThingDescription = {
         "@context": "https://www.w3.org/2022/wot/td/v1.1",
         title: "testTD",
+        id: "urn:uuid:0804d572-cce8-422a-bb7c-4412fcd56f03",
         securityDefinitions: {
             basic_sc: {
                 scheme: "basic",
@@ -496,17 +502,42 @@ class AssetInterfaceDescriptionUtilTest {
                     },
                 ],
             },
+            temperature: {
+                description: "Temperature value of the weather station",
+                type: "number",
+                minimum: -32.5,
+                maximum: 55.2,
+                unit: "degreeCelsius",
+                forms: [
+                    {
+                        href: "temp",
+                    },
+                ],
+            },
         },
     };
 
-    @test async "should correctly transform sample TD into AID submodel"() {
+    @test async "should correctly transform sample TD1 into AID submodel"() {
         const sm = this.assetInterfaceDescriptionUtil.transformTD2SM(JSON.stringify(this.td1), ["https"]);
 
         const smObj = JSON.parse(sm);
         expect(smObj).to.have.property("idShort").that.equals("AssetInterfacesDescription");
+        expect(smObj).to.have.property("id");
+        expect(smObj).to.have.property("semanticId");
         expect(smObj).to.have.property("submodelElements").to.be.an("array").to.have.lengthOf.greaterThan(0);
         const smInterface = smObj.submodelElements[0];
+        expect(smInterface).to.have.property("idShort");
         expect(smInterface).to.have.property("value").to.be.an("array").to.have.lengthOf.greaterThan(0);
+        expect(smInterface)
+            .to.have.property("semanticId")
+            .to.be.an("object")
+            .with.property("keys")
+            .to.be.an("array")
+            .to.have.lengthOf.greaterThan(0);
+        expect(smInterface)
+            .to.have.property("supplementalSemanticIds")
+            .to.be.an("array")
+            .to.have.lengthOf.greaterThan(1); // default WoT-TD and http
         let hasThingTitle = false;
         let hasEndpointMetadata = false;
         for (const smValue of smInterface.value) {
@@ -533,7 +564,28 @@ class AssetInterfaceDescriptionUtilTest {
                             .to.have.property("value")
                             .to.be.an("array")
                             .to.have.lengthOf.greaterThan(0);
-                        expect(endpointMetadataValue.value[0].value).to.equal("basic_sc");
+                        expect(endpointMetadataValue.value[0]).to.have.property("value");
+                        const modelReferenceValue = endpointMetadataValue.value[0].value;
+                        expect(modelReferenceValue).to.have.property("type").to.equal("ModelReference");
+                        expect(modelReferenceValue).to.have.property("keys").to.be.an("array").to.have.lengthOf(5);
+                        expect(modelReferenceValue.keys[0]).to.have.property("type").to.equal("Submodel");
+                        expect(modelReferenceValue.keys[0]).to.have.property("value").to.equal(smObj.id);
+                        expect(modelReferenceValue.keys[1])
+                            .to.have.property("type")
+                            .to.equal("SubmodelElementCollection");
+                        expect(modelReferenceValue.keys[1]).to.have.property("value").to.equal(smInterface.idShort);
+                        expect(modelReferenceValue.keys[2])
+                            .to.have.property("type")
+                            .to.equal("SubmodelElementCollection");
+                        expect(modelReferenceValue.keys[2]).to.have.property("value").to.equal("EndpointMetadata");
+                        expect(modelReferenceValue.keys[3])
+                            .to.have.property("type")
+                            .to.equal("SubmodelElementCollection");
+                        expect(modelReferenceValue.keys[3]).to.have.property("value").to.equal("securityDefinitions");
+                        expect(modelReferenceValue.keys[4])
+                            .to.have.property("type")
+                            .to.equal("SubmodelElementCollection");
+                        expect(modelReferenceValue.keys[4]).to.have.property("value").to.equal("basic_sc");
                     } else if (endpointMetadataValue.idShort === "securityDefinitions") {
                         hasSecurityDefinitions = true;
                         expect(endpointMetadataValue)
@@ -549,13 +601,18 @@ class AssetInterfaceDescriptionUtilTest {
                                     .to.be.an("array")
                                     .to.have.lengthOf.greaterThan(0);
                                 let hasBasic = false;
+                                let hasIn = false;
                                 for (const sec of securityDefinitionValue.value) {
                                     if (sec.idShort === "scheme") {
                                         hasBasic = true;
                                         expect(sec.value).to.equal("basic");
+                                    } else if (sec.idShort === "in") {
+                                        hasIn = true;
+                                        expect(sec.value).to.equal("header");
                                     }
                                 }
                                 expect(hasBasic).to.equal(true);
+                                expect(hasIn).to.equal(true);
                             }
                         }
                         expect(hasBasicSC).to.equal(true);
@@ -585,7 +642,7 @@ class AssetInterfaceDescriptionUtilTest {
                             .to.be.an("array")
                             .to.have.lengthOf.greaterThan(0);
                         let hasPropertyStatus = false;
-                        let hasPropertyStatusDescription = false;
+                        let hasPropertyTemperature = false;
                         for (const propertyValue of interactionValues.value) {
                             if (propertyValue.idShort === "status") {
                                 hasPropertyStatus = true;
@@ -597,6 +654,7 @@ class AssetInterfaceDescriptionUtilTest {
                                 let hasTitle = false;
                                 let hasObservable = false;
                                 let hasForms = false;
+                                let hasPropertyStatusDescription = false;
                                 for (const propProperty of propertyValue.value) {
                                     if (propProperty.idShort === "type") {
                                         hasType = true;
@@ -635,29 +693,58 @@ class AssetInterfaceDescriptionUtilTest {
                                         expect(hasHtvMethodName).to.equal(true);
                                     }
                                 }
+                                if (propertyValue.description != null) {
+                                    hasPropertyStatusDescription = true;
+                                    expect(propertyValue)
+                                        .to.have.property("description")
+                                        .to.eql([
+                                            {
+                                                language: "en",
+                                                text: "Statistic",
+                                            },
+                                            {
+                                                language: "de",
+                                                text: "Statistik",
+                                            },
+                                        ]);
+                                }
                                 expect(hasType).to.equal(true);
                                 expect(hasTitle).to.equal(false);
                                 expect(hasObservable).to.equal(true);
                                 expect(hasForms).to.equal(true);
-                            }
-                            if (propertyValue.description != null) {
-                                hasPropertyStatusDescription = true;
+                                expect(hasPropertyStatusDescription).to.equal(true);
+                            } else if (propertyValue.idShort === "temperature") {
+                                hasPropertyTemperature = true;
                                 expect(propertyValue)
-                                    .to.have.property("description")
-                                    .to.eql([
-                                        {
-                                            language: "en",
-                                            text: "Statistic",
-                                        },
-                                        {
-                                            language: "de",
-                                            text: "Statistik",
-                                        },
-                                    ]);
+                                    .to.have.property("value")
+                                    .to.be.an("array")
+                                    .to.have.lengthOf.greaterThan(0);
+                                let hasType = false;
+                                let hasDescription = false;
+                                let hasUnit = false;
+                                let hasForms = false;
+                                for (const propProperty of propertyValue.value) {
+                                    if (propProperty.idShort === "type") {
+                                        hasType = true;
+                                        expect(propProperty.value).to.equal("number");
+                                    } else if (propProperty.idShort === "description") {
+                                        hasDescription = true;
+                                        expect(propProperty.value).to.equal("Temperature value of the weather station");
+                                    } else if (propProperty.idShort === "unit") {
+                                        hasUnit = true;
+                                        expect(propProperty.value).to.equal("degreeCelsius");
+                                    } else if (propProperty.idShort === "forms") {
+                                        hasForms = true;
+                                    }
+                                }
+                                expect(hasType).to.equal(true);
+                                expect(hasDescription).to.equal(true);
+                                expect(hasUnit).to.equal(true);
+                                expect(hasForms).to.equal(true);
                             }
                         }
                         expect(hasPropertyStatus).to.equal(true);
-                        expect(hasPropertyStatusDescription).to.equal(true);
+                        expect(hasPropertyTemperature).to.equal(true);
                     }
                 }
                 expect(hasProperties).to.equal(true);
@@ -666,16 +753,14 @@ class AssetInterfaceDescriptionUtilTest {
         expect(hasInterfaceMetadata, "No InterfaceMetadata").to.equal(true);
 
         // Test to use all possible prefixes -> in this case it is only https
+        // Note: id is autogenerated (if not present) -> needs to be exluded/removed/set in TD
         const sm2 = this.assetInterfaceDescriptionUtil.transformTD2SM(JSON.stringify(this.td1));
         const sm2Obj = JSON.parse(sm2);
-        // Note: id is autogenerated and needs to be exluded/removed
-        delete smObj.id;
-        delete sm2Obj.id;
         expect(smObj).to.eql(sm2Obj);
     }
 
     @test
-    async "should transform sample TD into JSON submodel without any properties due to unknown protocol prefix"() {
+    async "should transform sample TD1 into JSON submodel without any properties due to unknown protocol prefix"() {
         const sm = this.assetInterfaceDescriptionUtil.transformTD2SM(JSON.stringify(this.td1), ["unknown"]);
 
         const smObj = JSON.parse(sm);
@@ -700,7 +785,7 @@ class AssetInterfaceDescriptionUtilTest {
         expect(hasInterfaceMetadata, "No InterfaceMetadata").to.equal(true);
     }
 
-    @test async "should correctly transform sample TD into JSON AAS"() {
+    @test async "should correctly transform sample TD1 into JSON AAS"() {
         const sm = this.assetInterfaceDescriptionUtil.transformTD2AAS(JSON.stringify(this.td1), ["http"]);
 
         const aasObj = JSON.parse(sm);
@@ -708,6 +793,176 @@ class AssetInterfaceDescriptionUtilTest {
         expect(aasObj).to.have.property("submodels").to.be.an("array").to.have.lengthOf(1);
 
         // Note: proper AID submodel checks done in previous test-cases
+    }
+
+    td2: ThingDescription = {
+        "@context": "https://www.w3.org/2022/wot/td/v1.1",
+        title: "ModbusTD",
+        securityDefinitions: {
+            nosec_sc: {
+                scheme: "nosec",
+            },
+        },
+        security: "nosec_sc",
+        properties: {
+            prop: {
+                forms: [
+                    {
+                        href: "modbus+tcp://127.0.0.1:60000/1",
+                        op: "readproperty",
+                        "modbus:function": "readCoil",
+                        "modbus:address": 1,
+                    },
+                ],
+            },
+        },
+    };
+
+    @test async "should correctly transform sample TD2 into AID submodel"() {
+        const sm = this.assetInterfaceDescriptionUtil.transformTD2SM(JSON.stringify(this.td2));
+
+        const smObj = JSON.parse(sm);
+        expect(smObj).to.have.property("idShort").that.equals("AssetInterfacesDescription");
+        expect(smObj).to.have.property("semanticId");
+        expect(smObj).to.have.property("submodelElements").to.be.an("array").to.have.lengthOf.greaterThan(0);
+        const smInterface = smObj.submodelElements[0];
+        expect(smInterface).to.have.property("idShort").to.equal("InterfaceMODBUS_TCP"); // AID does not allow "+" in idShort, see InterfaceMODBUS+TCP
+        expect(smInterface).to.have.property("value").to.be.an("array").to.have.lengthOf.greaterThan(0);
+        expect(smInterface)
+            .to.have.property("semanticId")
+            .to.be.an("object")
+            .with.property("keys")
+            .to.be.an("array")
+            .to.have.lengthOf.greaterThan(0);
+        expect(smInterface)
+            .to.have.property("supplementalSemanticIds")
+            .to.be.an("array")
+            .to.have.lengthOf.greaterThan(1); // default WoT-TD and http
+        let hasThingTitle = false;
+        let hasEndpointMetadata = false;
+        for (const smValue of smInterface.value) {
+            if (smValue.idShort === "title") {
+                hasThingTitle = true;
+                expect(smValue).to.have.property("value").to.equal("ModbusTD");
+            } else if (smValue.idShort === "EndpointMetadata") {
+                hasEndpointMetadata = true;
+                const endpointMetadata = smValue;
+                expect(endpointMetadata).to.have.property("value").to.be.an("array").to.have.lengthOf.greaterThan(0);
+                let hasBase = false;
+                let hasContentType = false;
+                let hasSecurity = false;
+                let hasSecurityDefinitions = false;
+                for (const endpointMetadataValue of endpointMetadata.value) {
+                    if (endpointMetadataValue.idShort === "base") {
+                        hasBase = true;
+                    } else if (endpointMetadataValue.idShort === "contentType") {
+                        hasContentType = true;
+                    } else if (endpointMetadataValue.idShort === "security") {
+                        hasSecurity = true;
+                        expect(endpointMetadataValue)
+                            .to.have.property("value")
+                            .to.be.an("array")
+                            .to.have.lengthOf.greaterThan(0);
+                        expect(endpointMetadataValue.value[0]).to.have.property("value");
+                        const modelReferenceValue = endpointMetadataValue.value[0].value;
+                        expect(modelReferenceValue).to.have.property("type").to.equal("ModelReference");
+                        expect(modelReferenceValue).to.have.property("keys").to.be.an("array").to.have.lengthOf(5);
+                        expect(modelReferenceValue.keys[4]).to.have.property("value").to.equal("nosec_sc");
+                    } else if (endpointMetadataValue.idShort === "securityDefinitions") {
+                        hasSecurityDefinitions = true;
+                    }
+                }
+                expect(hasBase).to.equal(false);
+                expect(hasContentType).to.equal(false);
+                expect(hasSecurity).to.equal(true);
+                expect(hasSecurityDefinitions).to.equal(true);
+            }
+        }
+        expect(hasThingTitle, "No thing title").to.equal(true);
+        expect(hasEndpointMetadata, "No EndpointMetadata").to.equal(true);
+
+        // InterfaceMetadata with properties etc
+        let hasInterfaceMetadata = false;
+        for (const smValue of smInterface.value) {
+            if (smValue.idShort === "InterfaceMetadata") {
+                hasInterfaceMetadata = true;
+                expect(smValue).to.have.property("value").to.be.an("array").to.have.lengthOf.greaterThan(0);
+                let hasProperties = false;
+                for (const interactionValues of smValue.value) {
+                    if (interactionValues.idShort === "properties") {
+                        hasProperties = true;
+                        expect(interactionValues)
+                            .to.have.property("value")
+                            .to.be.an("array")
+                            .to.have.lengthOf.greaterThan(0);
+                        let hasPropertyProp = false;
+                        for (const propertyValue of interactionValues.value) {
+                            if (propertyValue.idShort === "prop") {
+                                hasPropertyProp = true;
+                                expect(propertyValue)
+                                    .to.have.property("value")
+                                    .to.be.an("array")
+                                    .to.have.lengthOf.greaterThan(0);
+                                let hasType = false;
+                                let hasTitle = false;
+                                let hasObservable = false;
+                                let hasForms = false;
+                                for (const propProperty of propertyValue.value) {
+                                    if (propProperty.idShort === "type") {
+                                        hasType = true;
+                                    } else if (propProperty.idShort === "title") {
+                                        hasTitle = true;
+                                    } else if (propProperty.idShort === "observable") {
+                                        hasObservable = true;
+                                    } else if (propProperty.idShort === "forms") {
+                                        hasForms = true;
+                                        expect(propProperty)
+                                            .to.have.property("value")
+                                            .to.be.an("array")
+                                            .to.have.lengthOf.greaterThan(0);
+                                        let hasHref = false;
+                                        let hasContentType = false;
+                                        let hasOp = false;
+                                        let hasModbusFunction = false;
+                                        let hasModbusAddress = false;
+                                        for (const formEntry of propProperty.value) {
+                                            if (formEntry.idShort === "href") {
+                                                hasHref = true;
+                                                expect(formEntry.value).to.equal("modbus+tcp://127.0.0.1:60000/1");
+                                            } else if (formEntry.idShort === "contentType") {
+                                                hasContentType = true;
+                                            } else if (formEntry.idShort === "op") {
+                                                hasOp = true;
+                                                expect(formEntry.value).to.equal("readproperty");
+                                            } else if (formEntry.idShort === "modbus_function") {
+                                                hasModbusFunction = true;
+                                                expect(formEntry.value).to.equal("readCoil");
+                                            } else if (formEntry.idShort === "modbus_address") {
+                                                hasModbusAddress = true;
+                                                expect(formEntry.value).to.equal("1");
+                                                expect(formEntry.valueType).to.equal("xs:int");
+                                            }
+                                        }
+                                        expect(hasHref).to.equal(true);
+                                        expect(hasContentType).to.equal(false);
+                                        expect(hasOp).to.equal(true);
+                                        expect(hasModbusFunction).to.equal(true);
+                                        expect(hasModbusAddress).to.equal(true);
+                                    }
+                                }
+                                expect(hasType).to.equal(false);
+                                expect(hasTitle).to.equal(false);
+                                expect(hasObservable).to.equal(false);
+                                expect(hasForms).to.equal(true);
+                            }
+                        }
+                        expect(hasPropertyProp).to.equal(true);
+                    }
+                }
+                expect(hasProperties).to.equal(true);
+            }
+        }
+        expect(hasInterfaceMetadata, "No InterfaceMetadata").to.equal(true);
     }
 
     @test.skip async "should correctly transform counter TD into JSON AAS"() {

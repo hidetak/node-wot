@@ -1,15 +1,15 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2019 Contributors to the Eclipse Foundation
- * 
+ * Copyright (c) 2023 Contributors to the Eclipse Foundation
+ *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
- * 
+ *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
  * http://www.eclipse.org/legal/epl-2.0, or the W3C Software Notice and
  * Document License (2015-05-13) which is available at
  * https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document.
- * 
+ *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
 
@@ -17,152 +17,186 @@
  * Protocol test suite to test protocol implementations
  */
 
-import { ProtocolClient, Content, ContentSerdes } from '@node-wot/core';
-import * as TD from '@node-wot/td-tools';
-import * as mqtt from 'mqtt';
-import { MqttForm, MqttQoS } from './mqtt';
-import { IPublishPacket, QoS } from 'mqtt';
-import * as url from 'url';
+import { ProtocolClient, Content, DefaultContent, createLoggers, ContentSerdes } from "@node-wot/core";
+import * as TD from "@node-wot/td-tools";
+import * as mqtt from "mqtt";
+import { MqttClientConfig, MqttForm, MqttQoS } from "./mqtt";
+import { IPublishPacket, QoS } from "mqtt";
+import * as url from "url";
 import { Subscription } from "rxjs/Subscription";
+import { Readable } from "stream";
+
+const { debug, warn } = createLoggers("binding-mqtt", "mqtt-client");
+
+declare interface MqttClientSecurityParameters {
+    username: string;
+    password: string;
+}
 
 export default class MqttClient implements ProtocolClient {
-    private user:string = undefined;
+    private scheme: string;
 
-    private psw:string = undefined;
+    constructor(private config: MqttClientConfig = {}, secure = false) {
+        this.scheme = "mqtt" + (secure ? "s" : "");
+    }
 
-    constructor(config: any = null, secure = false) {}
+    private client?: mqtt.MqttClient;
 
-    private client : any = undefined;
+    public subscribeResource(
+        form: MqttForm,
+        next: (value: Content) => void,
+        error?: (error: Error) => void,
+        complete?: () => void
+    ): Promise<Subscription> {
+        return new Promise<Subscription>((resolve, reject) => {
+            // get MQTT-based metadata
+            const contentType = form.contentType ?? ContentSerdes.DEFAULT;
+            const requestUri = new url.URL(form.href);
+            const topic = requestUri.pathname.slice(1);
+            const brokerUri: string = `${this.scheme}://` + requestUri.host;
 
-    public subscribeResource(form: MqttForm, next: ((value: any) => void), error?: (error: any) => void, complete?: () => void): any {
+            if (this.client === undefined) {
+                this.client = mqtt.connect(brokerUri, this.config);
+            }
 
-        // get MQTT-based metadata
-        let contentType = form.contentType;
-        let retain = form["mqtt:retain"]; // TODO: is this needed here?
-        let qos = form["mqtt:qos"]; // TODO: is this needed here?
-        let requestUri = url.parse(form['href']);
-        let topic = requestUri.pathname;
-        let brokerUri : String = "mqtt://"+requestUri.host;
+            if (this.client.connected) {
+                this.client.subscribe(topic);
+                resolve(
+                    new Subscription(() => {
+                        if (!this.client) {
+                            warn(
+                                `MQTT Client is undefined. This means that the client either failed to connect or was never initialized.`
+                            );
+                            return;
+                        }
+                        this.client.unsubscribe(topic);
+                    })
+                );
+            }
 
-        if(this.client==undefined) {
-            this.client = mqtt.connect(brokerUri)
+            this.client.on("connect", () => {
+                // In this case, the client is definitely defined.
+                // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                this.client!.subscribe(topic);
+                resolve(
+                    new Subscription(() => {
+                        if (!this.client) {
+                            warn(
+                                `MQTT Client is undefined. This means that the client either failed to connect or was never initialized.`
+                            );
+                            return;
+                        }
+                        this.client.unsubscribe(topic);
+                    })
+                );
+            });
+            this.client.on("message", (receivedTopic: string, payload: string, packet: IPublishPacket) => {
+                debug(`Received MQTT message (topic: ${receivedTopic}, data: ${payload})`);
+                if (receivedTopic === topic) {
+                    next(new Content(contentType, Readable.from(payload)));
+                }
+            });
+            this.client.on("error", (err: Error) => {
+                if (this.client) {
+                    this.client.end();
+                }
+                this.client = undefined;
+                // TODO: error handling
+                if (error) error(err);
+
+                reject(err);
+            });
+        });
+    }
+
+    public async readResource(form: MqttForm): Promise<Content> {
+        throw new Error("Method not implemented.");
+    }
+
+    public async writeResource(form: MqttForm, content: Content): Promise<void> {
+        const requestUri = new url.URL(form.href);
+        const topic = requestUri.pathname.slice(1);
+        const brokerUri = `${this.scheme}://${requestUri.host}`;
+
+        if (this.client === undefined) {
+            this.client = mqtt.connect(brokerUri, this.config);
         }
 
-        this.client.on('connect', () => this.client.subscribe(topic))
-        this.client.on('message', (receivedTopic : string, payload : string, packet: IPublishPacket) => {
-            console.debug("[binding-mqtt]","Received MQTT message (topic, data): (" + receivedTopic + ", "+ payload + ")");
-            if (receivedTopic === topic) {
-                next({ contentType: contentType, body: Buffer.from(payload) });
-            }
-        })
-        this.client.on('error', (error :any)  => {
-            if (this.client) {
-                this.client.end();
-            }
-            this.client == undefined;
-            // TODO: error handling
-            error(error);
-        });
-
-        return new Subscription(()=>{this.client.unsubscribe(topic)});
-      }
-
-    
-    readResource = (form: MqttForm): Promise<Content> => {
-        return new Promise<Content>((resolve, reject) => {
-            throw new Error('Method not implemented.');
-
-        });
+        // if not input was provided, set up an own body otherwise take input as body
+        if (content === undefined) {
+            this.client.publish(topic, Buffer.from(""));
+        } else {
+            const buffer = await content.toBuffer();
+            this.client.publish(topic, buffer);
+        }
     }
 
-    writeResource = (form: MqttForm, content: Content): Promise<void> => {
-        return new Promise<void>((resolve, reject) => {
-            throw new Error('Method not implemented.');
+    public async invokeResource(form: MqttForm, content: Content): Promise<Content> {
+        const requestUri = new url.URL(form.href);
+        const topic = requestUri.pathname.slice(1);
+        const brokerUri = `${this.scheme}://${requestUri.host}`;
 
-        });
+        if (this.client === undefined) {
+            this.client = mqtt.connect(brokerUri, this.config);
+        }
+
+        // if not input was provided, set up an own body otherwise take input as body
+        if (content === undefined) {
+            this.client.publish(topic, Buffer.from(""));
+        } else {
+            const buffer = await content.toBuffer();
+            this.client.publish(topic, buffer);
+        }
+        // there will bo no response
+        return new DefaultContent(Readable.from([]));
     }
 
-    invokeResource = (form: MqttForm, content: Content): Promise<Content> => {
-        return new Promise<Content>((resolve, reject) => {
+    public async unlinkResource(form: TD.Form): Promise<void> {
+        const requestUri = new url.URL(form.href);
+        const topic = requestUri.pathname.slice(1);
 
-
-            let requestUri = url.parse(form['href']);
-            let topic = requestUri.pathname;
-            let brokerUri : String = "mqtt://"+requestUri.host;
-            
-            if(this.client==undefined) {
-                this.client = mqtt.connect(brokerUri)
-            }
-
-            // if not input was provided, set up an own body otherwise take input as body
-            if (content == undefined){
-                this.client.publish(topic, JSON.stringify(Buffer.from("")))
-            }
-            else {
-                this.client.publish(topic, content.body)
-            }
-            // there will bo no response
-            resolve({ type: ContentSerdes.DEFAULT, body: Buffer.from("") });
-
-        });
+        if (this.client != null && this.client.connected) {
+            this.client.unsubscribe(topic);
+            debug(`MqttClient unsubscribed from topic '${topic}'`);
+        }
     }
 
-    unlinkResource = (form: TD.Form): Promise<void> => {
-        let requestUri = url.parse(form['href']);
-        let topic = requestUri.pathname;
-
-        return new Promise<void>((resolve, reject) => {
-            if(this.client && this.client.connected) {
-                this.client.unsubscribe(topic);
-                console.debug("[binding-mqtt]",`MqttClient unsubscribed from topic '${topic}'`);
-            }
-            resolve()
-        });
+    public async start(): Promise<void> {
+        // do nothing
     }
 
-    start = (): boolean => {
-        return true;
+    public async stop(): Promise<void> {
+        if (this.client) this.client.end();
     }
-    stop = (): boolean => {
-        if(this.client) this.client.end();
-        return true;
-    }
-    
-    //setSecurity = (metadata: any, credentials?: any): boolean => {
-        //TODO: Implement
-      //  throw new Error('Method not implemented.');
-   // }
 
+    public setSecurity(metadata: Array<TD.SecurityScheme>, credentials?: MqttClientSecurityParameters): boolean {
+        if (metadata === undefined || !Array.isArray(metadata) || metadata.length === 0) {
+            warn(`MqttClient received empty security metadata`);
+            return false;
+        }
+        const security: TD.SecurityScheme = metadata[0];
 
-
-    public setSecurity(metadata: Array<TD.SecurityScheme>, credentials?: any): boolean {
-
-        if (metadata === undefined || !Array.isArray(metadata) || metadata.length == 0) {
-            console.warn("[binding-mqtt]",`MqttClient received empty security metadata`);
-          return false;
-        }      
-        let security: TD.SecurityScheme = metadata[0];
-      
         if (security.scheme === "basic") {
-            //this.authorization = "Basic " + Buffer.from(credentials.username + ":" + credentials.password).toString('base64');
-          //  this.user = mqtt.username;
+            if (credentials === undefined) {
+                // FIXME: This error message should be reworded and adapt to logging convention
+                throw new Error("binding-mqtt: security wants to be basic but you have provided no credentials");
+            } else {
+                this.config.username = credentials.username;
+                this.config.password = credentials.password;
+            }
         }
         return true;
-      }
+    }
 
-    private mapQoS = (qos: MqttQoS): QoS => {
+    private mapQoS(qos: MqttQoS): QoS {
         switch (qos) {
             case 2:
-                return qos = 2;
+                return (qos = 2);
             case 1:
-                return qos = 1;
+                return (qos = 1);
             case 0:
             default:
-                return qos = 0;
+                return (qos = 0);
         }
-    }
-
-    private logError = (message: string): void => {
-        console.error("[binding-mqtt]",`[MqttClient]${message}`);
     }
 }

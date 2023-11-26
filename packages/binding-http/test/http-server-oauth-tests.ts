@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
+ * Copyright (c) 2023 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -12,41 +12,42 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
-import { suite, test, slow, timeout, skip, only, describe } from "mocha-typescript";
-import { expect, should, assert } from "chai";
+import { suite, test } from "@testdeck/mocha";
+import { should, expect } from "chai";
 import { HttpServer, OAuth2ServerConfig } from "../src/http";
 import { IntrospectionEndpoint, EndpointValidator } from "../src/oauth-token-validation";
-import { IncomingMessage } from "http";
-import Servient, { Helpers, ExposedThing } from "@node-wot/core";
+import Servient, { ExposedThing } from "@node-wot/core";
 import fetch from "node-fetch";
 
+class MockServient extends Servient {}
 
-should()
+should();
 @suite("OAuth server token validation tests")
-class OAuthServerTests{
-    private server:HttpServer;
-    async before(){
-        console.debug = () =>{}
-        console.warn = () =>{}
-        console.info = () =>{}
+class OAuthServerTests {
+    private server!: HttpServer;
+    async before() {
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        console.debug = () => {};
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        console.warn = () => {};
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
+        console.info = () => {};
 
         const method: IntrospectionEndpoint = {
             name: "introspection_endpoint",
-            endpoint: "http://localhost:4242"
-        }
+            endpoint: "http://localhost:4242",
+        };
         const authConfig: OAuth2ServerConfig = {
             scheme: "oauth2",
-            method: method,
-        }
+            method,
+        };
         this.server = new HttpServer({
-            security: authConfig
-        })
-
+            security: [authConfig],
+        });
 
         await this.server.start(new MockServient());
 
-        let testThing = new ExposedThing(null);
-        testThing = Helpers.extend({
+        const testThing = new ExposedThing(new Servient(), {
             title: "TestOAuth",
             id: "test",
             securityDefinitions: {
@@ -55,89 +56,83 @@ class OAuthServerTests{
                     flow: "code",
                     authorization: "https://example.com/authorization",
                     token: "https://example.com/token",
-                    scopes: ["limited", "special"]
-                }
+                    scopes: ["limited", "special"],
+                },
             },
             security: ["oauth2_sc"],
             properties: {
                 test: {
-                    type: "string"
-                }
-            }
-        }, testThing);
-        testThing.extendInteractions();
-        await testThing.writeProperty("test", "off")
+                    type: "string",
+                },
+            },
+        });
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
         testThing.properties.test.forms = [];
 
-        await this.server.expose(testThing)
+        await this.server.expose(testThing);
     }
 
-    async after(){
-        await this.server.stop()
+    async after() {
+        await this.server.stop();
     }
-    @test async "should configure oauth"(){
 
-        this.server["httpSecurityScheme"].should.be.equal("OAuth")
-        this.server["oAuthValidator"].should.be.instanceOf(EndpointValidator)
+    @test async "should configure oauth"() {
+        /* eslint-disable dot-notation */
+        this.server["supportedSecuritySchemes"].should.contain("oauth2");
+        expect(this.server["oAuthValidator"]).to.be.instanceOf(EndpointValidator);
+        /* eslint-enable dot-notation */
     }
 
     @test async "should call oauth validation"() {
-        
         let called = false;
-        
-        this.server["oAuthValidator"].validate = async (token,scopes,clients) => {
+
+        /* eslint-disable dot-notation */
+        expect(this.server["oAuthValidator"]).to.not.be.equal(undefined, "OAuth validator not set");
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        this.server["oAuthValidator"]!.validate = async (token, scopes, clients) => {
             called = true;
-            return true
-        }
+            return true;
+        };
+        /* eslint-enable dot-notation */
+        await fetch("http://localhost:8080/testoauth/properties/test");
 
-        await fetch("http://localhost:8080/testoauth/TestOAuth")
-
-        called.should.be.true
-
+        called.should.eql(true);
     }
 
     @test async "should send unauthorized if oauth validation fails"() {
-        
         let called = false;
-        
-        this.server["oAuthValidator"].validate = async (token,scopes,clients) => {
+
+        /* eslint-disable dot-notation */
+        expect(this.server["oAuthValidator"]).to.not.be.equal(undefined, "OAuth validator not set");
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        this.server["oAuthValidator"]!.validate = async (token, scopes, clients) => {
             called = true;
-            return false
-        }
+            return false;
+        };
+        /* eslint-enable dot-notation */
+        const response = await fetch("http://localhost:8080/testoauth/properties/test");
 
-        const response = await fetch("http://localhost:8080/testoauth/TestOAuth")
+        called.should.eql(true);
 
-        called.should.be.true
-
-        response.status.should.be.equal(401)
-
+        response.status.should.be.equal(401);
     }
 
     @test async "should send error if oauth validation throws"() {
-        
         let called = false;
-        
-        this.server["oAuthValidator"].validate = async (token,scopes,clients) => {
-            called = true
-            return false
-        }
 
-        const response = await fetch("http://localhost:8080/testoauth/TestOAuth")
+        /* eslint-disable dot-notation */
+        expect(this.server["oAuthValidator"]).to.not.be.equal(undefined, "OAuth validator not set");
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        this.server["oAuthValidator"]!.validate = async (token, scopes, clients) => {
+            called = true;
+            return false;
+        };
+        /* eslint-enable dot-notation */
+        const response = await fetch("http://localhost:8080/testoauth/properties/test");
 
-        called.should.be.true
+        called.should.eql(true);
 
-        response.status.should.be.equal(401)
-
-    }
-}
-
-
-class MockServient extends Servient {
-    constructor() {
-        super()
-    }
-
-    getCredentials(){
-
+        response.status.should.be.equal(401);
     }
 }

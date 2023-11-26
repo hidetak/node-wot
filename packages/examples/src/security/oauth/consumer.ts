@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
+ * Copyright (c) 2018 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -12,21 +12,19 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
-import "wot-typescript-definitions"
 import { Helpers } from "@node-wot/core";
+import { ThingDescription } from "wot-typescript-definitions";
 
-let WoT: WoT.WoT;
-let WoTHelpers: Helpers;
+let WoTHelpers!: Helpers;
 
-WoTHelpers.fetch("https://localhost:8080/oauth").then(td => {
-
-    WoT.consume(td).then(async thing => {
+WoTHelpers.fetch("https://localhost:8080/oauth").then((td) => {
+    WoT.consume(td as ThingDescription).then(async (thing) => {
         try {
-            const result = await thing.invokeAction("sayOk")
-            console.log("oAuth token was", result)   
+            const resp = await thing.invokeAction("sayOk");
+            const result = await resp?.value();
+            console.log("oAuth token was", result);
         } catch (error) {
-            console.log("It seems that I couldn't access the resource")
+            console.log("It seems that I couldn't access the resource");
         }
-    })
-})
-
+    });
+});

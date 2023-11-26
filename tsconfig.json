@@ -1,19 +1,45 @@
 {
-	"compilerOptions": {
-		"target": "es5",
-		"lib" : ["es2015","dom"],
-		"module": "commonjs",
-		"outDir": "dist",
-		"alwaysStrict": true,
-		"sourceMap": true,
-		"noImplicitAny": true,
-		"removeComments": true,
-		"noLib": false,
-		"preserveConstEnums": true,
-		"experimentalDecorators": true,
-		"declaration": true
-	},
-	"include": [
-		"src/**/*"
-	]
+    "compilerOptions": {
+        "target": "es6",
+        "lib": ["dom"],
+        "skipLibCheck": false,
+        "module": "commonjs",
+        "outDir": "dist",
+        "strict": true,
+        "composite": true,
+        "incremental": true,
+        "sourceMap": true,
+        "noImplicitReturns": true,
+        "removeComments": true,
+        "noLib": false,
+        "preserveConstEnums": true,
+        "experimentalDecorators": true,
+        "declaration": true,
+        "esModuleInterop": true,
+        "moduleResolution": "node" /* Specify module resolution strategy: 'node' (Node.js) or 'classic' (TypeScript pre-1.6). */,
+        "resolveJsonModule": false,
+        "skipDefaultLibCheck": false,
+        "allowJs": false,
+        "strictNullChecks": true
+    },
+    "references": [
+        { "path": "./packages/binding-coap" },
+        { "path": "./packages/binding-file" },
+        { "path": "./packages/binding-firestore" },
+        { "path": "./packages/binding-http" },
+        { "path": "./packages/binding-mbus" },
+        { "path": "./packages/binding-modbus" },
+        { "path": "./packages/binding-mqtt" },
+        { "path": "./packages/binding-netconf" },
+        { "path": "./packages/binding-opcua" },
+        { "path": "./packages/binding-websockets" },
+        { "path": "./packages/cli" },
+        { "path": "./packages/core" },
+        { "path": "./packages/td-tools" },
+        { "path": "./packages/examples" }
+    ],
+    "include": [
+        /** specifically nothing here */
+    ],
+    "exclude": []
 }

@@ -2,7 +2,7 @@
 
 This content is produced and maintained by the Eclipse Thingweb project.
 
-* Project home: https://projects.eclipse.org/projects/iot.thingweb
+-   Project home: https://projects.eclipse.org/projects/iot.thingweb
 
 ## Trademarks
 
@@ -13,6 +13,9 @@ Eclipse Thingweb is a trademark of the Eclipse Foundation.
 All content is the property of the respective authors or their employers. For
 more information regarding authorship of content, please consult the listed
 source code repository logs.
+
+Note: The {year} in the copyright statements is the year in which the content
+was created (e.g. “2004”). A range of years is not used.
 
 ## Declared Project Licenses
 
@@ -27,7 +30,6 @@ SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
 ## Source Code
 
 The project maintains the following source code repositories:
-
 
 ## Third-party Content
 

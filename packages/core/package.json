@@ -1,39 +1,50 @@
 {
-  "name": "@node-wot/core",
-  "version": "0.7.4",
-  "description": "W3C Web of Things (WoT) Servient framework",
-  "author": "Eclipse Thingweb <thingweb-dev@eclipse.org> (https://thingweb.io/)",
-  "license": "EPL-2.0 OR W3C-20150513",
-  "repository": "https://github.com/eclipse/thingweb.node-wot/tree/master/packages/core",
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "dist/"
-  ],
-  "main": "dist/core.js",
-  "types": "dist/core.d.ts",
-  "devDependencies": {
-    "@types/chai": "4.2.8",
-    "@types/node": "13.7.0",
-    "chai": "4.2.0",
-    "mocha": "3.5.3",
-    "mocha-typescript": "1.1.8",
-    "ts-node": "8.6.2",
-    "typescript": "3.7.5",
-    "typescript-standard": "0.3.36"
-  },
-  "dependencies": {
-    "wot-typescript-definitions": "0.7.3",
-    "@node-wot/td-tools": "0.7.4",
-    "uuid": "3.4.0",
-    "rxjs": "5.5.11",
-    "uritemplate": "0.3.4",
-    "@types/uritemplate": "0.3.4",
-    "vm2": "^3.9.2"
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "mocha --compilers ts:ts-node/register"
-  }
+    "name": "@node-wot/core",
+    "version": "0.8.10",
+    "description": "W3C Web of Things (WoT) Servient framework",
+    "author": "Eclipse Thingweb <thingweb-dev@eclipse.org> (https://thingweb.io/)",
+    "license": "EPL-2.0 OR W3C-20150513",
+    "repository": "https://github.com/eclipse-thingweb/node-wot/tree/master/packages/core",
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist/",
+        "src/"
+    ],
+    "main": "dist/core.js",
+    "types": "dist/core.d.ts",
+    "devDependencies": {
+        "@types/debug": "^4.1.7",
+        "@types/uritemplate": "^0.3.4",
+        "@types/uuid": "^8.3.1"
+    },
+    "dependencies": {
+        "@node-wot/td-tools": "0.8.10",
+        "@petamoriken/float16": "^3.1.1",
+        "ajv": "^8.11.0",
+        "cbor": "^8.1.0",
+        "debug": "^4.3.4",
+        "uritemplate": "0.3.4",
+        "uuid": "^7.0.3",
+        "web-streams-polyfill": "^3.0.1"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"**/*.json\"",
+        "test": "mocha --require ts-node/register --extension ts"
+    },
+    "bugs": {
+        "url": "https://github.com/eclipse-thingweb/node-wot/issues"
+    },
+    "homepage": "https://github.com/eclipse-thingweb/node-wot/tree/master/packages/core#readme",
+    "directories": {
+        "test": "test"
+    },
+    "keywords": [],
+    "eslintConfig": {
+        "extends": "../../.eslintrc.js"
+    }
 }

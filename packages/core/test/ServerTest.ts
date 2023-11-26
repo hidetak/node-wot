@@ -1,86 +1,106 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
- * 
+ * Copyright (c) 2023 Contributors to the Eclipse Foundation
+ *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
- * 
+ *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
  * http://www.eclipse.org/legal/epl-2.0, or the W3C Software Notice and
  * Document License (2015-05-13) which is available at
  * https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document.
- * 
+ *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
 
 /**
  * Basic test suite to demonstrate test setup
  * uncomment the @skip to see failing tests
- * 
+ *
  * h0ru5: there is currently some problem with VSC failing to recognize experimentalDecorators option, it is present in both tsconfigs
  */
 
-import { suite, test, slow, timeout, skip, only } from "mocha-typescript";
-import { expect, should } from "chai";
-import { fail } from "assert";
+import { suite, test } from "@testdeck/mocha";
+import { expect, should, use as chaiUse, spy } from "chai";
+import spies from "chai-spies";
+import Servient from "../src/servient";
+import { Content } from "../src/content";
+import { ProtocolServer } from "../src/protocol-interfaces";
+import ExposedThing from "../src/exposed-thing";
+import { Readable } from "stream";
+import { InteractionInput, InteractionOptions, InteractionOutput } from "wot-typescript-definitions";
+import chaiAsPromised from "chai-as-promised";
+import { createLoggers } from "../src/core";
+
+const { debug } = createLoggers("core", "ServerTest");
+
+chaiUse(chaiAsPromised);
 // should must be called to augment all variables
 should();
-
-import * as TD from "@node-wot/td-tools";
-
-import Servient from "../src/servient";
-import { ProtocolServer } from "../src/protocol-interfaces"
-import ExposedThing from "../src/exposed-thing";
+chaiUse(spies);
 
 // implement a testserver to mock a server
 class TestProtocolServer implements ProtocolServer {
-
     public readonly scheme: string = "test";
-    
-    expose(thing: ExposedThing): Promise<void> {
-        return new Promise<void>((resolve, reject) => {});
+
+    async expose(thing: ExposedThing): Promise<void> {}
+
+    async destroy(thingId: string): Promise<boolean> {
+        return true;
     }
 
-    start(): Promise<void> { return new Promise<void>((resolve, reject) => { resolve(); }); }
-    stop(): Promise<void> { return new Promise<void>((resolve, reject) => { resolve(); }); }
-    getPort(): number { return -1 }
+    async start(): Promise<void> {}
+
+    async stop(): Promise<void> {}
+
+    getPort(): number {
+        return -1;
+    }
 }
 
 @suite("the server side of servient")
 class WoTServerTest {
-
     static servient: Servient;
-    static WoT: WoT.WoT;
+    static WoT: typeof WoT;
     static server: TestProtocolServer;
 
     static before() {
         this.servient = new Servient();
         this.server = new TestProtocolServer();
         this.servient.addServer(this.server);
-        this.servient.start().then(WoTruntime => { this.WoT = WoTruntime; });
-        console.log("started test suite");
+        this.servient.start().then((WoTruntime) => {
+            this.WoT = WoTruntime;
+        });
+        debug("started test suite");
     }
 
-    static after() {
-        this.servient.shutdown();
-        console.log("finished test suite");
+    static async after(): Promise<void> {
+        await this.servient.shutdown();
+        debug("finished test suite");
     }
 
     @test async "should be able to add a Thing based on WoT.ThingFragment"() {
-        let thing = await WoTServerTest.WoT.produce({
+        const thing = await WoTServerTest.WoT.produce({
             title: "myFragmentThing",
             support: "none",
             "test:custom": "test",
             properties: {
-                myProp: { }
-            }
+                myProp: {},
+            },
         });
 
+        // eslint-disable-next-line no-unused-expressions
         expect(thing).to.exist;
         // round-trip
         expect(thing.getThingDescription()).to.have.property("title").that.equals("myFragmentThing");
         expect(thing.getThingDescription()).to.have.property("support").that.equals("none");
         expect(thing.getThingDescription()).to.have.property("test:custom").that.equals("test");
+        // should not share internals
+        expect(thing.getThingDescription()).to.not.have.property("#propertyHandlers");
+        expect(thing.getThingDescription()).to.not.have.property("#actionHandlers");
+        expect(thing.getThingDescription()).to.not.have.property("#eventHandlers");
+        expect(thing.getThingDescription()).to.not.have.property("#propertyListeners");
+        expect(thing.getThingDescription()).to.not.have.property("#eventListeners");
         // direct access
         expect(thing).to.have.property("title").that.equals("myFragmentThing");
         expect(thing).to.have.property("support").that.equals("none");
@@ -89,6 +109,8 @@ class WoTServerTest {
         expect(thing).to.have.property("properties").to.have.property("myProp");
     }
 
+    // TODO: Review server side tests since ExposedThing does not implement ConsumedThing anymore
+    /*
     @test async "should be able to add a Thing based on WoT.ThingDescription"() {
         let desc = `{
             "@context": ["https://w3c.github.io/wot/w3c-wot-td-context.jsonld"],
@@ -115,6 +137,28 @@ class WoTServerTest {
         expect(thing).to.have.property("properties").to.have.property("myProp");
     }
 
+    @test async "should be able to destroy a Thing based on a thingId"() {
+        let desc = `{
+            "@context": ["https://w3c.github.io/wot/w3c-wot-td-context.jsonld"],
+            "@type": ["Thing"],
+            "title": "myDestroyThing",
+            "id": "1234567",
+            "properties": {
+                "myProp" : {
+                }
+            }
+        }`;
+        let thing = await WoTServerTest.WoT.produce(JSON.parse(desc));
+        expect(thing).to.exist;
+        // test TD
+        expect(thing.getThingDescription()).to.have.property("title").to.equal("myDestroyThing");
+        expect(thing.getThingDescription()).to.have.property("id").to.equal("1234567");
+        // test presence (and destroy)
+        expect(WoTServerTest.servient.getThing("1234567")).to.not.be.null;
+        await thing.destroy(); // destroy -> remove
+        expect(WoTServerTest.servient.getThing("1234567")).to.be.null;
+    }
+
     @test async "should be able to add a property with value 1"() {
         let thing = await WoTServerTest.WoT.produce({
             title: "ThingWith1",
@@ -124,18 +168,27 @@ class WoTServerTest {
                 }
             }
         });
-        await thing.writeProperty("number", 1); // init
+        let number: WoT.DataSchemaValue = 1; // init
+        thing.setPropertyWriteHandler("number", async (io: WoT.InteractionOutput) => {
+            number = await io.value();
+        });
+        thing.setPropertyReadHandler("number", () => {
+            return new Promise((resolve, reject) => {
+                resolve(number);
+            });
+        });
 
         expect(thing).to.have.property("properties").to.have.property("number");
         expect(thing).to.have.property("properties").to.have.property("number").to.have.property("readOnly").that.equals(false);
         expect(thing).to.have.property("properties").to.have.property("number").to.have.property("observable").that.equals(false);
 
-        let value1 = await thing.readProperty("number");
-        expect(value1).to.equal(1);
-
         let readUnknownPossible = false;
         try {
-            await thing.readProperty("numberUnknwon")
+            thing.setPropertyReadHandler("numberUnknown", () => {
+                return new Promise((resolve, reject) => {
+                    resolve(number);
+                });
+            });
             readUnknownPossible = true;
         } catch(e) {
             // as expected
@@ -145,8 +198,8 @@ class WoTServerTest {
         }
     }
 
-    // skipped so far, see https://github.com/eclipse/thingweb.node-wot/issues/333#issuecomment-724583234
-    @test.skip async "should not be able to read property with writeOnly"() {
+    // skipped so far, see https://github.com/eclipse-thingweb/node-wot/issues/333#issuecomment-724583234
+    /* @test.skip async "should not be able to read property with writeOnly"() {
         let thing = await WoTServerTest.WoT.produce({
             title: "ThingWithWriteOnly",
             properties: {
@@ -168,10 +221,10 @@ class WoTServerTest {
         if (readingPossible) {
             fail("reading property 'numberWriteOnly' should throw error")
         }
-    }
+    } */
 
-    // skipped so far, see https://github.com/eclipse/thingweb.node-wot/issues/333#issuecomment-724583234
-    @test.skip async "should not be able to write property with readOnly"() {
+    // skipped so far, see https://github.com/eclipse-thingweb/node-wot/issues/333#issuecomment-724583234
+    /* @test.skip async "should not be able to write property with readOnly"() {
         let thing = await WoTServerTest.WoT.produce({
             title: "ThingWithReadOnly",
             properties: {
@@ -186,9 +239,9 @@ class WoTServerTest {
                 resolve(213);
             });
         })
-        let val = await thing.readProperty("numberReadOnly");
+        let val = await (await thing.readProperty("numberReadOnly")).value();
         expect(val === 213);
-        
+
         let readingPossible = false;
         try {
             await thing.writeProperty("numberReadOnly", 1);
@@ -199,28 +252,78 @@ class WoTServerTest {
         if (readingPossible) {
             fail("writing property 'numberReadOnly' should throw error")
         }
-    }
+    } */
 
     @test async "should be able to add a thing with spaces in title and property "() {
-        let thing = await WoTServerTest.WoT.produce({
+        const thing = await WoTServerTest.WoT.produce({
             title: "The Machine",
             properties: {
                 "my number": {
+                    type: "number",
+                },
+            },
+        });
+        const number: WoT.DataSchemaValue = 1; // init
+
+        const readHandler = async () => {
+            return number;
+        };
+
+        thing.setPropertyReadHandler("my number", readHandler);
+
+        expect(thing).to.have.property("properties").to.have.property("my number");
+
+        // Check internals, how to to check handlers properly with *some* type-safety
+        const ff = await readHandler?.();
+        expect(ff).to.equal(1);
+    }
+
+    // see https://github.com/eclipse-thingweb/node-wot/issues/426
+    /* @test async "should remove tmModel type"() {
+        let thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            "@type" : "tm:ThingModel",
+            properties: {
+                "number": {
                     type: "number"
                 }
             }
         });
-        await thing.writeProperty("my number", 1);
+        expect(thing).to.not.have.property("@type");
+    } */
 
-        expect(thing).to.have.property("properties").to.have.property("my number");
-        expect(thing).to.have.property("properties").to.have.property("my number").to.have.property("readOnly").that.equals(false);
-        expect(thing).to.have.property("properties").to.have.property("my number").to.have.property("observable").that.equals(false);
+    // see https://github.com/eclipse-thingweb/node-wot/issues/426
+    /* @test async "should not remove any other type than tmModel"() {
+        let thing = await WoTServerTest.WoT.produce({
+            title: "The Sensor",
+            "@type": "saref:TemperatureSensor",
+            properties: {
+                "number": {
+                    type: "number"
+                }
+            }
+        });
+        expect(thing).to.have.property("@type").that.equals("saref:TemperatureSensor");
+    } */
 
-        let value1 = await thing.readProperty("my number");
-        expect(value1).to.equal(1);
-    }
+    // see https://github.com/eclipse-thingweb/node-wot/issues/426
+    /* @test async "should not remove any other type than tmModel in array"() {
+        let thing = await WoTServerTest.WoT.produce({
+            title: "The Sensor",
+            "@type": ["saref:TemperatureSensor", "tm:ThingModel"],
+            properties: {
+                "number": {
+                    type: "number"
+                }
+            }
+        });
+        expect(thing).to.have.property("@type").that.contains("saref:TemperatureSensor");
+        expect(thing).to.have.property("@type").that.not.contains("tm:ThingModel");
+    } */
 
-
+    // TODO: Review server side tests since ExposedThing does not implement ConsumedThing anymore
+    // TBD: Are the following tests still useful/sensible?
+    /*
     @test async "should be able to add a property with default value XYZ"() {
         let thing = await WoTServerTest.WoT.produce({
             title: "ThingWithXYZ",
@@ -231,7 +334,7 @@ class WoTServerTest {
             }
         });
         await thing.writeProperty("string", "XYZ"); // init
-        
+
         expect(thing).to.have.property("properties").to.have.property("string");
         expect(thing).to.have.property("properties").to.have.property("string").to.have.property("readOnly").that.equals(false);
         expect(thing).to.have.property("properties").to.have.property("string").to.have.property("observable").that.equals(false);
@@ -240,7 +343,7 @@ class WoTServerTest {
         try {
             expect(thing).to.have.property("properties").to.have.property("number");
             expectUnknownProperty = true;
-            
+
         } catch(e) {
             // no property "number"
         }
@@ -261,7 +364,7 @@ class WoTServerTest {
                 }
             }
         });
-        
+
         expect(thing).to.have.property("properties").to.have.property("null");
         expect(thing).to.have.property("properties").to.have.property("null").to.have.property("readOnly").that.equals(false);
         expect(thing).to.have.property("properties").to.have.property("null").to.have.property("observable").that.equals(false);
@@ -290,7 +393,7 @@ class WoTServerTest {
 
     }
 
-    
+
     @test async "should be able to read/readAll properties locally"() {
         let thing = await WoTServerTest.WoT.produce({
             title: "thing3",
@@ -349,7 +452,7 @@ class WoTServerTest {
 
         expect(await thing.readProperty("number")).to.equal(1);
         expect(await thing.readProperty("number")).to.equal(2);
-        expect(await thing.readProperty("number")).to.equal(3); 
+        expect(await thing.readProperty("number")).to.equal(3);
     }
 
     @test async "should be able to read and write property"() {
@@ -412,7 +515,7 @@ class WoTServerTest {
                     if (!this.counter) {
                         // init counter the first time
                         this.counter = 0;
-                        console.log("local counter state initialized with 0");
+                        debug("local counter state initialized with 0");
                     } else {
                         expect(typeof this.counter).equals("number");
                         expect(this.counter).greaterThan(0);
@@ -601,7 +704,7 @@ class WoTServerTest {
     }
 
     @test async "should not add (or modify) @language if present "() {
-        // see issue https://github.com/eclipse/thingweb.node-wot/issues/111
+        // see issue https://github.com/eclipse-thingweb/node-wot/issues/111
         let thing = await WoTServerTest.WoT.produce(JSON.parse(`{
             "@context": ["https://w3c.github.io/wot/w3c-wot-td-context.jsonld", {"iot": "http://example.org/iot"}, {"@language" : "xx"}],
             "@type": ["Thing"],
@@ -701,8 +804,269 @@ class WoTServerTest {
             fail("invoking action 'toggle' should throw error")
         }
     }
-
+    */
     // TODO add Event and subscribe locally (based on addEvent)
     // TODO add Event and subscribe locally (based on WoT.ThingFragment)
     // TODO add Event and subscribe locally (based on WoT.ThingDescription)
+    @test async "should call read handler"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            properties: {
+                test: {
+                    type: "string",
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["readproperty"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async () => {
+            return true;
+        });
+        thing.setPropertyReadHandler("test", callback);
+
+        await (<ExposedThing>thing).handleReadProperty("test", { formIndex: 0 });
+
+        callback.should.have.been.called();
+    }
+
+    @test async "should call write handler"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            properties: {
+                test: {
+                    type: "string",
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["readproperty", "writeproperty"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async () => {
+            /** */
+        });
+        thing.setPropertyWriteHandler("test", callback);
+
+        await (<ExposedThing>thing).handleWriteProperty("test", new Content("", Readable.from(Buffer.alloc(0))), {
+            formIndex: 0,
+        });
+
+        callback.should.have.been.called();
+    }
+
+    @test async "should call read handler and emit an event"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            properties: {
+                test: {
+                    type: "string",
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["readproperty", "observeproperty"],
+                        },
+                    ],
+                },
+            },
+        });
+
+        const callback = spy(async (options?: InteractionOptions): Promise<InteractionInput> => {
+            return "newValue";
+        });
+
+        const protocolListener = spy(async (content: Content) => {
+            // eslint-disable-next-line no-unused-expressions
+            expect(content.type).not.to.be.undefined;
+            // eslint-disable-next-line no-unused-expressions
+            expect(content.body).not.to.be.undefined;
+
+            const body = await content.toBuffer();
+            body.should.be.eq('"test"');
+        });
+
+        thing.setPropertyReadHandler("test", callback);
+
+        (thing as ExposedThing).handleObserveProperty("test", protocolListener, { formIndex: 0 });
+
+        await (<ExposedThing>thing).emitPropertyChange("test");
+
+        callback.should.have.been.called();
+        protocolListener.should.have.been.called();
+    }
+
+    @test async "should be able to subscribe to an event"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            events: {
+                test: {
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["subscribeevent"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy();
+        await (<ExposedThing>thing).handleSubscribeEvent("test", callback, { formIndex: 0 });
+        (<ExposedThing>thing).emitEvent("test", null);
+
+        callback.should.have.been.called();
+    }
+
+    @test async "should call subscribe handler"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            events: {
+                test: {
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["subscribeevent"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async () => {
+            /**  */
+        });
+        thing.setEventSubscribeHandler("test", callback);
+        await (<ExposedThing>thing).handleSubscribeEvent("test", callback, { formIndex: 0 });
+
+        callback.should.have.been.called();
+    }
+
+    @test async "should be able to unsubscribe to an event"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            events: {
+                test: {
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["subscribeevent"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async () => {
+            /**  */
+        });
+        const handler = spy(async () => {
+            /**  */
+        });
+        thing.setEventSubscribeHandler("test", handler);
+        await (<ExposedThing>thing).handleSubscribeEvent("test", callback, { formIndex: 0 });
+        (<ExposedThing>thing).emitEvent("test", null);
+        (<ExposedThing>thing).handleUnsubscribeEvent("test", callback, { formIndex: 0 });
+        (<ExposedThing>thing).emitEvent("test", null);
+
+        return expect(callback).to.have.been.called.once;
+    }
+
+    @test async "should call action handler"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            actions: {
+                test: {
+                    type: "string",
+                    input: {
+                        type: "string",
+                    },
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["invokeaction"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async (params: InteractionOutput) => {
+            expect(await params.value()).to.be.equal("ping");
+            return "";
+        });
+
+        thing.setActionHandler("test", callback);
+
+        await (<ExposedThing>thing).handleInvokeAction(
+            "test",
+            new Content("application/json", Readable.from(Buffer.from("ping"))),
+            { formIndex: 0 }
+        );
+
+        callback.should.have.been.called();
+    }
+
+    @test async "should return content when returning 0 for action handler"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            actions: {
+                test: {
+                    output: {
+                        type: "number",
+                    },
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["invokeaction"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async (params: InteractionOutput) => {
+            return 0;
+        });
+
+        thing.setActionHandler("test", callback);
+
+        const result = await (<ExposedThing>thing).handleInvokeAction(
+            "test",
+            new Content("application/json", Readable.from(Buffer.from(""))),
+            { formIndex: 0 }
+        );
+
+        callback.should.have.been.called();
+        expect(result).to.be.instanceOf(Content);
+    }
+
+    @test async "should fail due to wrong uriVariable"() {
+        const thing = await WoTServerTest.WoT.produce({
+            title: "The Machine",
+            properties: {
+                test: {
+                    type: "string",
+                    uriVariables: {
+                        testRight: {
+                            type: "string",
+                        },
+                    },
+                    forms: [
+                        {
+                            href: "http://example.org/test",
+                            op: ["readproperty"],
+                        },
+                    ],
+                },
+            },
+        });
+        const callback = spy(async () => {
+            return true;
+        });
+        thing.setPropertyReadHandler("test", callback);
+
+        expect(
+            (<ExposedThing>thing).handleReadProperty("test", { formIndex: 0, uriVariables: { testWrong: "test" } })
+        ).to.eventually.be.rejectedWith(Error);
+    }
 }

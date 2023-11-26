@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
+ * Copyright (c) 2018 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -12,44 +12,34 @@
  *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
-import "wot-typescript-definitions"
-import { Helpers } from "@node-wot/core";
 
-let WoT: WoT.WoT;
-let WoTHelpers: Helpers;
+import { ExposedThingInit } from "wot-typescript-definitions";
 
-let td = {
+const td: ExposedThingInit = {
     "@context": "https://www.w3.org/2019/wot/td/v1",
-    "title": "OAuth",
-    "id": "urn:dev:wot:oauth:test",
-    "securityDefinitions": {
-        "oauth2_sc": {
-            "scheme": "oauth2",
-            "flow": "client_credentials",
-            "authorization": "https://example.com/authorization",
-            "token": "https://localhost:3000/token",
-            "scopes": [
-                "limited",
-                "special"
-            ]
-        }
+    title: "OAuth",
+    id: "urn:dev:wot:oauth:test",
+    securityDefinitions: {
+        oauth2_sc: {
+            scheme: "oauth2",
+            flow: "client",
+            token: "https://localhost:3000/token",
+            scopes: ["user", "admin"],
+        },
     },
-    "security": [
-        "oauth2_sc"
-    ],
-    "actions": {
-        "sayOk": {
-            "description": "A simple action protected with oauth",
-            "idempotent": true
-        }
-    }
-}
+    security: ["oauth2_sc"],
+    actions: {
+        sayOk: {
+            description: "A simple action protected with oauth",
+            idempotent: true,
+        },
+    },
+};
 try {
     WoT.produce(td).then((thing) => {
-        thing.setActionHandler("sayOk",async ()=> "Ok!" )
-        thing.expose()
+        thing.setActionHandler("sayOk", async () => "Ok!");
+        thing.expose();
     });
-}
-catch (err) {
+} catch (err) {
     console.error("Script error: " + err);
 }

@@ -1,27 +1,37 @@
 {
-  "name": "@node-wot/browser-bundle",
-  "version": "0.7.4",
-  "description": "A node-wot bundle that can run in a web browser",
-  "author": "Eclipse Thingweb <thingweb-dev@eclipse.org> (https://thingweb.io/)",
-  "license": "EPL-2.0 OR W3C-20150513",
-  "repository": "https://github.com/eclipse/thingweb.node-wot/tree/master/packages/browser-bundle",
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "dist/"
-  ],
-  "main": "dist/wot-bundle.min.js",
-  "devDependencies": {
-    "@node-wot/core": "0.7.4",
-    "@node-wot/binding-http": "0.7.4",
-    "@node-wot/binding-websockets": "0.7.4",
-    "browserify": "16.5.0",
-    "tinyify": "2.5.2"
-  },
-  "dependencies": {
-  },
-  "scripts": {
-    "build": "browserify -r vm:vm2 index.js --plugin tinyify --external coffee-script -o dist/wot-bundle.min.js"
-  }
+    "name": "@node-wot/browser-bundle",
+    "version": "0.8.10",
+    "description": "A node-wot bundle that can run in a web browser",
+    "author": "Eclipse Thingweb <thingweb-dev@eclipse.org> (https://thingweb.io/)",
+    "license": "EPL-2.0 OR W3C-20150513",
+    "repository": "https://github.com/eclipse-thingweb/node-wot/tree/master/packages/browser-bundle",
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist/"
+    ],
+    "main": "dist/wot-bundle.min.js",
+    "devDependencies": {
+        "@node-wot/binding-http": "0.8.10",
+        "@node-wot/binding-websockets": "0.8.10",
+        "@node-wot/core": "0.8.10",
+        "@node-wot/td-tools": "0.8.10",
+        "browserify": "^17.0.0",
+        "readable-stream4": "npm:readable-stream@^4.0.0"
+    },
+    "scripts": {
+        "build": "node build.js",
+        "format": "prettier --write index.js \"**/*.json\""
+    },
+    "bugs": {
+        "url": "https://github.com/eclipse-thingweb/node-wot/issues"
+    },
+    "homepage": "https://github.com/eclipse-thingweb/node-wot/tree/master/packages/browser-bundle#readme",
+    "keywords": [],
+    "dependencies": {
+        "events": "^2.1.0",
+        "inherits": "^2.0.3",
+        "resolve": "^1.1.7"
+    }
 }

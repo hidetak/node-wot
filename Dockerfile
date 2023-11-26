@@ -1,5 +1,4 @@
-FROM node:12.16.1-alpine3.11 as BUILD
-
+FROM docker.io/library/node:18-alpine as BUILD
 RUN apk add --no-cache \
 	gcc \
     g++ \
@@ -8,34 +7,32 @@ RUN apk add --no-cache \
     udev \
     python3
 
-ARG BUILD_ENV=development
+## change it to maintain all the dev dependencies
+ARG BUILD_ENV=production
+WORKDIR /app
+COPY ./package.json ./
+COPY ./package-lock.json ./
+COPY ./tsconfig.json ./
+COPY ./packages packages/
 
-WORKDIR /home/node/app
+RUN npm install && npm run build
 
-COPY package*.json ./
+# now remove dev dependencies by reinstalling for production
+# this wil reduce the size of the image built in next steps significantly
+RUN if [ "${BUILD_ENV}" = "production" ]; then npm prune --production; fi
 
-RUN npm install
+FROM docker.io/library/node:18-alpine
 
-COPY . .
+COPY --from=BUILD  /app /app
 
-RUN npm run build  \
-    && if [ "${BUILD_ENV}" = "production" ]; then node_modules/.bin/lerna exec "npm prune --production"; fi 
+WORKDIR /app/packages/cli
 
-FROM node:12.16.1-alpine3.11
+EXPOSE 8080/tcp
+EXPOSE 5683/udp
 
-COPY --from=BUILD  /home/node/app/packages/cli /usr/local/lib/node_modules/@node-wot/cli
-COPY --from=BUILD  /home/node/app/packages/td-tools /usr/local/lib/node_modules/@node-wot/td-tools
-COPY --from=BUILD  /home/node/app/packages/core /usr/local/lib/node_modules/@node-wot/core
-COPY --from=BUILD  /home/node/app/packages/binding-http /usr/local/lib/node_modules/@node-wot/binding-http
-COPY --from=BUILD  /home/node/app/packages/binding-file /usr/local/lib/node_modules/@node-wot/binding-file
-COPY --from=BUILD  /home/node/app/packages/binding-mqtt /usr/local/lib/node_modules/@node-wot/binding-mqtt
-COPY --from=BUILD  /home/node/app/packages/binding-coap /usr/local/lib/node_modules/@node-wot/binding-coap
-COPY --from=BUILD  /home/node/app/packages/binding-websockets /usr/local/lib/node_modules/@node-wot/binding-websockets
-
-
-WORKDIR /usr/local/lib/node_modules/@node-wot/cli
-
-EXPOSE 8080
+STOPSIGNAL SIGINT
 
 ENTRYPOINT [ "node", "dist/cli.js" ]
 CMD [ "-h" ]
+
+##  docker build -t wot-servient ./docker/Dockerfile

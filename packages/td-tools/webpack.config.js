@@ -1,19 +1,22 @@
-const path = require('path');
+const path = require("path");
 
 module.exports = {
     mode: "production",
     entry: "./src/td-tools.ts",
     output: {
-        path: path.resolve(__dirname, 'dist'),
+        path: path.resolve(__dirname, "dist"),
         filename: "node-wot-td-tools.bundle.js",
-        library: "TDTools"
+        library: "TDTools",
     },
     resolve: {
-        extensions: [".ts", ".js"]
+        fallback: {
+            http: require.resolve("stream-http"),
+            https: require.resolve("https-browserify"),
+            fs: false,
+        },
+        extensions: [".ts", ".js"],
     },
     module: {
-        rules: [
-            { test: /\.ts$/, loader: "ts-loader" }
-        ]
-    }
-}
+        rules: [{ test: /\.ts$/, loader: "ts-loader" }],
+    },
+};

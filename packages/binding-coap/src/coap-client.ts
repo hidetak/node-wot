@@ -1,15 +1,15 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2019 Contributors to the Eclipse Foundation
- * 
+ * Copyright (c) 2023 Contributors to the Eclipse Foundation
+ *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
- * 
+ *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
  * http://www.eclipse.org/legal/epl-2.0, or the W3C Software Notice and
  * Document License (2015-05-13) which is available at
  * https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document.
- * 
+ *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
 
@@ -17,212 +17,255 @@
  * CoAP client based on coap by mcollina
  */
 
-let coap = require("coap");
 import * as url from "url";
+import * as net from "net";
 
 import { Subscription } from "rxjs/Subscription";
 
 // for Security definition
 import * as TD from "@node-wot/td-tools";
 
-import { ProtocolClient, Content, ContentSerdes } from "@node-wot/core";
-import { CoapForm, CoapRequestConfig, CoapOption } from "./coap";
+import { ProtocolClient, Content, ContentSerdes, createLoggers } from "@node-wot/core";
+import { BlockSize, blockSizeToOptionValue, CoapForm, CoapMethodName } from "./coap";
 import CoapServer from "./coap-server";
+import { Readable } from "stream";
+import {
+    Agent,
+    registerFormat,
+    AgentOptions,
+    CoapRequestParams,
+    IncomingMessage,
+    OutgoingMessage,
+    ObserveReadStream,
+} from "coap";
+
+const { debug, warn } = createLoggers("binding-coap", "coap-client");
 
 export default class CoapClient implements ProtocolClient {
+    // FIXME coap Agent closes socket when no messages in flight -> new socket with every request
+    private agent: Agent;
+    private readonly agentOptions: AgentOptions;
 
-  // FIXME coap Agent closes socket when no messages in flight -> new socket with every request
-  private readonly agent: any;
+    constructor(server?: CoapServer) {
+        // if server is passed, feed its socket into the CoAP agent for socket re-use
+        this.agent = new Agent(server ? { socket: server.getSocket() } : undefined);
+        this.agentOptions = server ? { socket: server.getSocket() } : {};
 
-  constructor(server?: CoapServer) {
-    // if server is passed, feed its socket into the CoAP agent for socket re-use
-    this.agent = new coap.Agent(server ? { socket: server.getSocket() } : undefined);
-    
-    // WoT-specific content formats
-    coap.registerFormat(ContentSerdes.JSON_LD, 2100);
-    // TODO also register content fromat with IANA
-    // from experimental range for now
-    coap.registerFormat(ContentSerdes.TD, 65100);
-    // TODO need hook from ContentSerdes for runtime data formats
-  }
-
-  public toString(): string {
-    return "[CoapClient]";
-  }
-
-  public readResource(form: CoapForm): Promise<Content> {
-    return new Promise<Content>((resolve, reject) => {
-
-      let req = this.generateRequest(form, "GET");
-
-      console.debug("[binding-coap]",`CoapClient sending ${req.statusCode} to ${form.href}`);
-
-      req.on("response", (res: any) => {
-        console.debug("[binding-coap]",`CoapClient received ${res.code} from ${form.href}`);
-        console.debug("[binding-coap]",`CoapClient received Content-Format: ${res.headers["Content-Format"]}`);
-        
-        // FIXME does not work with blockwise because of node-coap
-        let contentType = res.headers["Content-Format"];
-        if (!contentType) contentType = form.contentType;
-        
-        resolve({ type: contentType, body: res.payload });
-      });
-      req.on("error", (err: Error) => reject(err));
-      req.end();
-    });
-  }
-
-  public writeResource(form: CoapForm, content: Content): Promise<any> {
-    return new Promise<void>((resolve, reject) => {
-
-      let req = this.generateRequest(form, "PUT");
-
-      // TODO set Content-FOrmat
-
-      console.debug("[binding-coap]",`CoapClient sending ${req.statusCode} to ${form.href}`);
-
-      req.on("response", (res: any) => {
-        console.debug("[binding-coap]",`CoapClient received ${res.code} from ${form.href}`);
-        console.debug("[binding-coap]",`CoapClient received headers: ${JSON.stringify(res.headers)}`);
-        resolve();
-      });
-      req.on("error", (err: Error) => reject(err));
-      req.setOption("Content-Format", content.type);
-      req.write(content.body);
-      req.end();
-    });
-  }
-
-  public invokeResource(form: CoapForm, content?: Content): Promise<Content> {
-    return new Promise<Content>((resolve, reject) => {
-
-      let req = this.generateRequest(form, "POST");
-
-      console.debug("[binding-coap]",`CoapClient sending ${req.statusCode} to ${form.href}`);
-
-      req.on("response", (res: any) => {
-        console.debug("[binding-coap]",`CoapClient received ${res.code} from ${form.href}`);
-        console.debug("[binding-coap]",`CoapClient received Content-Format: ${res.headers["Content-Format"]}`);
-        console.debug("[binding-coap]",`CoapClient received headers: ${JSON.stringify(res.headers)}`);
-        let contentType = res.headers["Content-Format"];
-        resolve({ type: contentType, body: res.payload });
-      });
-      req.on("error", (err: Error) => reject(err));
-      if (content) {
-        req.setOption("Content-Format", content.type);
-        req.write(content.body);
-      }
-      req.end();
-    });
-  }
-
-  public unlinkResource(form: CoapForm): Promise<any> {
-    return new Promise<void>((resolve, reject) => {
-
-      let req = this.generateRequest(form, "GET", false);
-
-      console.debug("[binding-coap]",`CoapClient sending ${req.statusCode} to ${form.href}`);
-
-      req.on("response", (res: any) => {
-        console.debug("[binding-coap]",`CoapClient received ${res.code} from ${form.href}`);
-        console.debug("[binding-coap]",`CoapClient received headers: ${JSON.stringify(res.headers)}`);
-        resolve();
-      });
-      req.on("error", (err: Error) => reject(err));
-      req.end();
-    });
-  }
-
-  public subscribeResource(form: CoapForm, next: ((value: any) => void), error?: (error: any) => void, complete?: () => void): any {
-    let req = this.generateRequest(form, "GET", true);
-
-    console.debug("[binding-coap]",`CoapClient sending ${req.statusCode} to ${form.href}`);
-
-    req.on("response", (res: any) => {
-      console.debug("[binding-coap]",`CoapClient received ${res.code} from ${form.href}`);
-      console.debug("[binding-coap]",`CoapClient received Content-Format: ${res.headers["Content-Format"]}`);
-
-      // FIXME does not work with blockwise because of node-coap
-      let contentType = res.headers["Content-Format"];
-      if (!contentType) contentType = form.contentType;
-
-      res.on('data', (data: any) => {
-        next({ type: contentType, body: res.payload });
-      });
-    });
-
-    req.on("error", (err: any) => error(err));
-
-    req.end();
-
-    return new Subscription( () => {} );
-  }
-
-  public start(): boolean {
-    return true;
-  }
-
-  public stop(): boolean {
-    // FIXME coap does not provide proper API to close Agent
-    return true;
-  }
-  public setSecurity = (metadata: Array<TD.SecurityScheme>) => true;
-
-  private uriToOptions(uri: string): CoapRequestConfig {
-    let requestUri = url.parse(uri);
-    let options: CoapRequestConfig = {
-      agent: this.agent,
-      hostname: requestUri.hostname,
-      port: parseInt(requestUri.port, 10),
-      pathname: requestUri.pathname,
-      query: requestUri.query,
-      observe: false,
-      multicast: false,
-      confirmable: true
-    };
-
-    // TODO auth
-
-    return options;
-  }
-
-  private generateRequest(form: CoapForm, dflt: string, observable: boolean = false): any {
-
-    let options: CoapRequestConfig = this.uriToOptions(form.href);
-
-    options.method = dflt;
-
-    if (typeof form["coap:methodCode"] === "number") {
-      console.debug("[binding-coap]","CoapClient got Form 'methodCode'", form["coap:methodCode"]);
-      switch (form["coap:methodCode"]) {
-        case 1: options.method = "GET"; break;
-        case 2: options.method = "POST"; break;
-        case 3: options.method = "PUT"; break;
-        case 4: options.method = "DELETE"; break;
-        default: console.warn("[binding-coap]","CoapClient got invalid 'methodCode', using default", options.method);
-      }
-    }
-    options.observe = observable;
-
-    let req = this.agent.request(options);
-
-    // apply form data
-    if (typeof form.contentType === "string") {
-      console.debug("[binding-coap]","CoapClient got Form 'contentType'", form.contentType);
-      req.setOption("Accept", form.contentType);
-    }
-    if (Array.isArray(form["coap:options"])) {
-      console.debug("[binding-coap]","CoapClient got Form 'options'", form["coap:options"]);
-      let options = form["coap:options"] as Array<CoapOption>;
-      for (let option of options) {
-        req.setOption(option["coap:optionCode"], option["coap:optionValue"]);
-      }
-    } else if (typeof form["coap:options"] === "object") {
-      console.warn("[binding-coap]","CoapClient got Form SINGLE-ENTRY 'options'", form["coap:options"]);
-      let option = form["coap:options"] as CoapOption;
-      req.setHeader(option["coap:optionCode"], option["coap:optionValue"]);
+        // WoT-specific content formats
+        registerFormat(ContentSerdes.JSON_LD, 2100);
     }
 
-    return req;
-  }
+    public toString(): string {
+        return "[CoapClient]";
+    }
+
+    public async readResource(form: CoapForm): Promise<Content> {
+        const req = await this.generateRequest(form, "GET");
+        debug(`CoapClient sending ${req.statusCode} to ${form.href}`);
+        return new Promise<Content>((resolve, reject) => {
+            req.on("response", (res: ObserveReadStream) => {
+                debug(`CoapClient received ${res.code} from ${form.href}`);
+                debug(`CoapClient received Content-Format: ${res.headers["Content-Format"]}`);
+
+                // FIXME does not work with blockwise because of node-coap
+                const contentType = (res.headers["Content-Format"] as string) ?? form.contentType;
+
+                resolve(new Content(contentType, Readable.from(res.payload)));
+            });
+            req.on("error", (err: Error) => reject(err));
+            req.end();
+        });
+    }
+
+    public writeResource(form: CoapForm, content: Content): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            content
+                .toBuffer()
+                .then((buffer) => {
+                    const req = this.generateRequest(form, "PUT");
+
+                    // TODO set Content-FOrmat
+
+                    debug(`CoapClient sending ${req.statusCode} to ${form.href}`);
+
+                    req.on("response", (res: IncomingMessage) => {
+                        debug(`CoapClient received ${res.code} from ${form.href}`);
+                        debug(`CoapClient received headers: ${JSON.stringify(res.headers)}`);
+                        resolve();
+                    });
+                    req.on("error", (err: Error) => reject(err));
+                    req.setOption("Content-Format", content.type);
+                    req.write(buffer);
+                    req.end();
+                })
+                .catch(reject);
+        });
+    }
+
+    public invokeResource(form: CoapForm, content?: Content): Promise<Content> {
+        return new Promise<Content>((resolve, reject) => {
+            const req = this.generateRequest(form, "POST");
+
+            debug(`CoapClient sending ${req.statusCode} to ${form.href}`);
+
+            req.on("response", (res: IncomingMessage) => {
+                debug(`CoapClient received ${res.code} from ${form.href}`);
+                debug(`CoapClient received Content-Format: ${res.headers["Content-Format"]}`);
+                debug(`CoapClient received headers: ${JSON.stringify(res.headers)}`);
+                const contentType = res.headers["Content-Format"] as string;
+                resolve(new Content(contentType ?? "", Readable.from(res.payload)));
+            });
+            req.on("error", (err: Error) => reject(err));
+            (async () => {
+                if (content != null) {
+                    const buffer = await content.toBuffer();
+                    req.setOption("Content-Format", content.type);
+                    req.write(buffer);
+                }
+                req.end();
+            })();
+        });
+    }
+
+    public unlinkResource(form: CoapForm): Promise<void> {
+        return new Promise<void>((resolve, reject) => {
+            const req = this.generateRequest(form, "GET", false);
+
+            debug(`CoapClient sending ${req.statusCode} to ${form.href}`);
+
+            req.on("response", (res: IncomingMessage) => {
+                debug(`CoapClient received ${res.code} from ${form.href}`);
+                debug(`CoapClient received headers: ${JSON.stringify(res.headers)}`);
+                resolve();
+            });
+            req.on("error", (err: Error) => reject(err));
+            req.end();
+        });
+    }
+
+    public subscribeResource(
+        form: CoapForm,
+        next: (value: Content) => void,
+        error?: (error: Error) => void,
+        complete?: () => void
+    ): Promise<Subscription> {
+        return new Promise<Subscription>((resolve, reject) => {
+            const req = this.generateRequest(form, "GET", true);
+
+            debug(`CoapClient sending ${req.statusCode} to ${form.href}`);
+
+            req.on("response", (res: ObserveReadStream) => {
+                debug(`CoapClient received ${res.code} from ${form.href}`);
+                debug(`CoapClient received Content-Format: ${res.headers["Content-Format"]}`);
+
+                // FIXME does not work with blockwise because of node-coap
+                const contentType = res.headers["Content-Format"] ?? form.contentType ?? ContentSerdes.DEFAULT;
+
+                res.on("data", (data: Buffer) => {
+                    next(new Content(`${contentType}`, Readable.from(res.payload)));
+                });
+
+                resolve(
+                    new Subscription(() => {
+                        res.close();
+                        if (complete) complete();
+                    })
+                );
+            });
+
+            req.on("error", (err: Error) => {
+                if (error) {
+                    error(err);
+                }
+            });
+
+            req.end();
+        });
+    }
+
+    public async start(): Promise<void> {
+        // do nothing
+    }
+
+    public async stop(): Promise<void> {
+        this.agent.close();
+    }
+
+    public setSecurity = (metadata: Array<TD.SecurityScheme>): boolean => true;
+
+    private uriToOptions(uri: string): CoapRequestParams {
+        // eslint-disable-next-line n/no-deprecated-api
+        const requestUri = url.parse(uri);
+        const agentOptions = this.agentOptions;
+        agentOptions.type = net.isIPv6(requestUri.hostname ?? "") ? "udp6" : "udp4";
+        this.agent = new Agent(agentOptions);
+
+        const options: CoapRequestParams = {
+            agent: this.agent,
+            hostname: requestUri.hostname ?? "",
+            port: requestUri.port != null ? parseInt(requestUri.port, 10) : 5683,
+            pathname: requestUri.pathname ?? "",
+            query: requestUri.query ?? "",
+            observe: false,
+            multicast: false,
+            confirmable: true,
+        };
+
+        // TODO auth
+
+        return options;
+    }
+
+    private setBlockOption(req: OutgoingMessage, optionName: "Block1" | "Block2", blockSize?: BlockSize): void {
+        if (blockSize == null) {
+            return;
+        }
+
+        try {
+            const block2OptionValue = blockSizeToOptionValue(blockSize);
+            req.setOption(optionName, block2OptionValue);
+        } catch (error) {
+            warn(`${error}`);
+        }
+    }
+
+    private getRequestParamsFromForm(form: CoapForm, defaultMethod: CoapMethodName, observe = false) {
+        // TODO: Add qblock parameters and hop limit, once implemented in node-coap
+
+        const method = form["cov:method"] ?? defaultMethod;
+        debug(`CoapClient got Form "method" ${method}`);
+
+        const contentFormat = form["cov:contentFormat"] ?? form.contentType ?? "application/json";
+        debug(`"CoapClient got Form 'contentType' ${contentFormat} `);
+
+        const accept = form["cov:accept"];
+        if (accept != null) {
+            debug(`"CoapClient determined Form 'accept' ${accept} `);
+        }
+
+        return {
+            ...this.uriToOptions(form.href),
+            method,
+            observe,
+            contentFormat,
+            accept,
+        };
+    }
+
+    private applyFormDataToRequest(form: CoapForm, req: OutgoingMessage) {
+        const blockwise = form["cov:blockwise"];
+        if (blockwise != null) {
+            this.setBlockOption(req, "Block2", blockwise["cov:block2Size"]);
+            this.setBlockOption(req, "Block1", blockwise["cov:block1Size"]);
+        }
+    }
+
+    private generateRequest(form: CoapForm, defaultMethod: CoapMethodName, observable = false): OutgoingMessage {
+        const requestParams = this.getRequestParamsFromForm(form, defaultMethod, observable);
+
+        const req = this.agent.request(requestParams);
+        this.applyFormDataToRequest(form, req);
+
+        return req;
+    }
 }

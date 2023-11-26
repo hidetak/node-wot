@@ -1,44 +1,66 @@
 {
-  "name": "@node-wot/binding-opcua",
-  "version": "0.7.4",
-  "description": "opcua client protocol binding for node-wot",
-  "author": "Eclipse Thingweb <thingweb-dev@eclipse.org> (https://thingweb.io/)",
-  "license": "EPL-2.0 OR W3C-20150513",
-  "repository": "https://github.com/thingweb/node-wot/tree/master/packages/binding-opcua",
-  "publishConfig": {
-    "access": "public"
-  },
-  "files": [
-    "dist/"
-  ],
-  "main": "dist/opcua.js",
-  "types": "dist/opcua.d.ts",
-  "devDependencies": {
-    "@node-wot/core": "0.7.4",
-    "@node-wot/td-tools": "0.7.4",
-    "@types/chai": "^4.2.7",
-    "@types/mocha": "^5.2.7",
-    "@types/node": "^10.9.4",
-    "chai": "^4.2.0",
-    "chai-spies": "^1.0.0",
-    "mocha": "^7.0.0",
-    "node-opcua": "^2.4.3",
-    "ts-node": "^8.6.2",
-    "typescript": "3.6.3",
-    "typescript-standard": "0.3.30"
-  },
-  "dependencies": {
-    "@node-wot/core": "0.7.4",
-    "@types/url-parse": "^1.4.3",
-    "case-1.5.3": "npm:case@^1.5.3",
-    "node-opcua-client": "^2.1.8",
-    "typescript": "3.6.3",
-    "url-parse": "^1.4.7",
-    "wot-typescript-definitions": "0.7.3",
-    "xml-writer": "^1.7.0"
-  },
-  "scripts": {
-    "build": "tsc",
-    "test": "mocha --require ts-node/register test/opcua-client-test.ts"
-  }
+    "name": "@node-wot/binding-opcua",
+    "version": "0.8.10",
+    "description": "opcua client protocol binding for node-wot",
+    "author": "Eclipse Thingweb <thingweb-dev@eclipse.org> (https://thingweb.io/)",
+    "license": "EPL-2.0 OR W3C-20150513",
+    "repository": "https://github.com/thingweb/node-wot/tree/master/packages/binding-opcua",
+    "publishConfig": {
+        "access": "public"
+    },
+    "files": [
+        "dist",
+        "src"
+    ],
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "devDependencies": {
+        "should": "^13.2.3"
+    },
+    "dependencies": {
+        "@node-wot/core": "0.8.10",
+        "@node-wot/td-tools": "0.8.10",
+        "ajv": "^8.11.0",
+        "ajv-formats": "^2.1.1",
+        "node-opcua": "2.113.0",
+        "node-opcua-address-space": "2.113.0",
+        "node-opcua-basic-types": "2.113.0",
+        "node-opcua-binary-stream": "2.110.0",
+        "node-opcua-buffer-utils": "2.110.0",
+        "node-opcua-client": "2.113.0",
+        "node-opcua-constants": "2.98.1",
+        "node-opcua-data-model": "2.113.0",
+        "node-opcua-data-value": "2.113.0",
+        "node-opcua-date-time": "2.113.0",
+        "node-opcua-debug": "2.113.0",
+        "node-opcua-extension-object": "2.113.0",
+        "node-opcua-factory": "2.113.0",
+        "node-opcua-json": "0.50.0",
+        "node-opcua-nodeid": "2.113.0",
+        "node-opcua-numeric-range": "2.113.0",
+        "node-opcua-pseudo-session": "2.113.0",
+        "node-opcua-pubsub-client": "0.19.1",
+        "node-opcua-service-browse": "2.113.0",
+        "node-opcua-service-translate-browse-path": "2.113.0",
+        "node-opcua-status-code": "2.110.0",
+        "node-opcua-types": "2.113.0",
+        "node-opcua-variant": "2.113.0",
+        "rxjs": "5.5.11"
+    },
+    "scripts": {
+        "build": "tsc -b",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\" \"**/*.json\"",
+        "ncu:opcua": "npx -y npm-check-updates -u -f \"node-opcua*\" -t newest",
+        "test": "mocha"
+    },
+    "bugs": {
+        "url": "https://github.com/eclipse-thingweb/node-wot/issues"
+    },
+    "homepage": "https://github.com/eclipse-thingweb/node-wot/tree/master/packages/binding-opcua#readme",
+    "directories": {
+        "test": "test"
+    },
+    "keywords": []
 }

@@ -1,97 +1,93 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2019 Contributors to the Eclipse Foundation
- * 
+ * Copyright (c) 2023 Contributors to the Eclipse Foundation
+ *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
- * 
+ *
  * This program and the accompanying materials are made available under the
  * terms of the Eclipse Public License v. 2.0 which is available at
  * http://www.eclipse.org/legal/epl-2.0, or the W3C Software Notice and
  * Document License (2015-05-13) which is available at
  * https://www.w3.org/Consortium/Legal/2015/copyright-software-and-document.
- * 
+ *
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
 
 /**
  * File protocol binding
  */
-import { Form } from "@node-wot/td-tools";
-import { ProtocolClient, Content } from "@node-wot/core"
-import fs = require('fs');
-import path = require('path');
+import { Form, SecurityScheme } from "@node-wot/td-tools";
+import { ProtocolClient, Content, createLoggers } from "@node-wot/core";
+import { Subscription } from "rxjs/Subscription";
+import fs = require("fs");
+import path = require("path");
+
+const { debug, warn } = createLoggers("binding-file", "file-client");
 
 export default class FileClient implements ProtocolClient {
+    public toString(): string {
+        return "[FileClient]";
+    }
 
-  constructor() { }
-
-  public toString() {
-    return "[FileClient]";
-  }
-
-  public readResource(form: Form): Promise<Content> {
-    return new Promise<Content>((resolve, reject) => {
-      let filepath = form.href.split('//');
-      let resource = fs.readFileSync(filepath[1], 'utf8');
-      let extension = path.extname(filepath[1]);
-      console.debug("[binding-file]", `FileClient found '${extension}' extension`);
-      let contentType;
-      if (form.contentType) {
-        contentType = form.contentType;
-      } else {
-        // *guess* contentType based on file extension
-        contentType = "application/octet-stream";
-        switch (extension) {
-          case ".txt":
-          case ".log":
-          case ".ini":
-          case ".cfg":
-            contentType = "text/plain";
-            break;
-          case ".json":
-            contentType = "application/json";
-            break;
-          case ".jsonld":
-            contentType = "application/ld+json";
-            break;
-          default:
-            console.warn("[binding-file]", `FileClient cannot determine media type of '${form.href}'`);
+    public async readResource(form: Form): Promise<Content> {
+        const filepath = form.href.split("//");
+        const resource = fs.createReadStream(filepath[1]);
+        const extension = path.extname(filepath[1]);
+        debug(`FileClient found '${extension}' extension`);
+        let contentType;
+        if (form.contentType != null) {
+            contentType = form.contentType;
+        } else {
+            // *guess* contentType based on file extension
+            contentType = "application/octet-stream";
+            switch (extension) {
+                case ".txt":
+                case ".log":
+                case ".ini":
+                case ".cfg":
+                    contentType = "text/plain";
+                    break;
+                case ".json":
+                    contentType = "application/json";
+                    break;
+                case ".jsonld":
+                    contentType = "application/ld+json";
+                    break;
+                default:
+                    warn(`FileClient cannot determine media type of '${form.href}'`);
+            }
         }
-      }
-      resolve({ type: contentType, body: Buffer.from(resource) });
-    });
-  }
+        return new Content(contentType, resource);
+    }
 
-  public writeResource(form: Form, content: Content): Promise<any> {
-    return new Promise<Object>((resolve, reject) => {
-      reject(new Error(`FileClient does not implement write`));
-    });
-  }
+    public async writeResource(form: Form, content: Content): Promise<void> {
+        throw new Error("FileClient does not implement write");
+    }
 
-  public invokeResource(form: Form, payload: Object): Promise<any> {
-    return new Promise<Object>((resolve, reject) => {
-      reject(new Error(`FileClient does not implement invoke`));
-    });
-  }
+    public async invokeResource(form: Form, content: Content): Promise<Content> {
+        throw new Error("FileClient does not implement invoke");
+    }
 
-  public unlinkResource(form: Form): Promise<any> {
-    return new Promise<Object>((resolve, reject) => {
-      reject(new Error(`FileClient does not implement unlink`));
-    });
-  }
+    public async unlinkResource(form: Form): Promise<void> {
+        throw new Error("FileClient does not implement unlink");
+    }
 
-  public subscribeResource(form: Form, next: ((value: any) => void), error?: (error: any) => void, complete?: () => void): any {
-    error(new Error(`FileClient does not implement subscribe`));
-    return null;
-  }
+    public async subscribeResource(
+        form: Form,
+        next: (value: Content) => void,
+        error?: (error: Error) => void,
+        complete?: () => void
+    ): Promise<Subscription> {
+        throw new Error("FileClient does not implement subscribe");
+    }
 
-  public start(): boolean {
-    return true;
-  }
+    public async start(): Promise<void> {
+        // do nothing
+    }
 
-  public stop(): boolean {
-    return true;
-  }
+    public async stop(): Promise<void> {
+        // do nothing
+    }
 
-  public setSecurity = (metadata : any) => false;
+    public setSecurity = (metadata: Array<SecurityScheme>): boolean => false;
 }

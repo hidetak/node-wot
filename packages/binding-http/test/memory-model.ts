@@ -1,5 +1,5 @@
 /********************************************************************************
- * Copyright (c) 2018 - 2020 Contributors to the Eclipse Foundation
+ * Copyright (c) 2023 Contributors to the Eclipse Foundation
  *
  * See the NOTICE file(s) distributed with this work for additional
  * information regarding copyright ownership.
@@ -13,37 +13,92 @@
  * SPDX-License-Identifier: EPL-2.0 OR W3C-20150513
  ********************************************************************************/
 
- /**
+import { createDebugLogger } from "@node-wot/core";
+import {
+    PasswordModel,
+    ClientCredentialsModel,
+    Callback,
+    Token,
+    Falsey,
+    Client,
+    User,
+} from "@node-oauth/oauth2-server";
+
+const debug = createDebugLogger("binding-http", "memory-model");
+
+/**
  * oAuth server logic. See https://oauth2-server.readthedocs.io/en/latest/model/overview.html
  */
- export default class InMemoryModel{
-    clients: { clientId: string; clientSecret: string; redirectUris: string[];grants:string[] }[];
-    tokens: any[];
-    users: { id: string; username: string; password: string; }[];
+export default class InMemoryModel implements ClientCredentialsModel, PasswordModel {
+    clients: Client[];
+    tokens: Token[];
+    users: User[];
+    tokenGen = 0;
     /**
      *
      */
     constructor() {
-        this.clients = [{ clientId: 'thom', clientSecret: 'nightworld', redirectUris: [''], grants: ["client_credentials", "password","refresh_token"] }];
+        this.clients = [
+            {
+                id: "thom",
+                clientSecret: "nightworld",
+                redirectUris: [""],
+                grants: ["client_credentials", "password", "refresh_token"],
+            },
+        ];
         this.tokens = [];
-        this.users = [{ id: '123', username: 'thomseddon', password: 'nightworld' }];
-        
+        this.users = [{ id: "123", username: "thomseddon", password: "nightworld" }];
     }
 
-    dump() {
-        console.log('clients', this.clients);
-        console.log('tokens', this.tokens);
-        console.log('users', this.users);
+    async validateScope?(
+        user: User,
+        client: Client,
+        scope: string | string[],
+        callback?: Callback<string | false | 0>
+    ): Promise<string | false | 0 | string[]> {
+        if (callback) {
+            callback(null, scope.toString());
+        }
+
+        return scope;
+    }
+
+    async generateAccessToken?(
+        client: Client,
+        user: User,
+        scope: string | string[],
+        callback?: Callback<string>
+    ): Promise<string> {
+        if (callback) {
+            callback(null, Buffer.from(Math.random().toString()).toString("base64").substr(10, 5));
+        }
+        return Buffer.from(Math.random().toString()).toString("base64").substr(10, 5);
+    }
+
+    async verifyScope(token: Token, scope: string | string[], callback?: Callback<boolean>): Promise<boolean> {
+        if (callback) {
+            callback(null, true);
+        }
+        return true;
+    }
+
+    dump(): void {
+        debug(`Clients: ${this.clients}`);
+        debug(`Tokens: ${this.tokens}`);
+        debug(`Users: ${this.users}`);
     }
 
     /*
      * Get access token.
      */
 
-    getAccessToken  (bearerToken:string) {
-        var tokens = this.tokens.filter(function (token) {
+    async getAccessToken(bearerToken: string, callback?: Callback<Token>): Promise<Token | Falsey> {
+        const tokens = this.tokens.filter(function (token) {
             return token.accessToken === bearerToken;
         });
+        if (callback != null) {
+            callback(null, tokens[0]);
+        }
 
         return tokens.length ? tokens[0] : false;
     }
@@ -52,71 +107,78 @@
      * Get refresh token.
      */
 
-    getRefreshToken  (bearerToken:string) {
-        var tokens = this.tokens.filter(function (token) {
+    getRefreshToken(bearerToken: string): Token | false {
+        const tokens = this.tokens.filter(function (token) {
             return token.refreshToken === bearerToken;
         });
 
         return tokens.length ? tokens[0] : false;
-    };
+    }
 
     /**
      * Get client.
      */
 
-    getClient  (clientId:string, clientSecret:string) {
-        var clients = this.clients.filter(function (client) {
-            return client.clientId === clientId && (!clientSecret || client.clientSecret === clientSecret);
+    async getClient(
+        clientId: string,
+        clientSecret: string,
+        callback?: Callback<Falsey | Client>
+    ): Promise<Client | Falsey> {
+        const clients = this.clients.filter(function (client) {
+            return client.id === clientId && (!clientSecret || client.clientSecret === clientSecret);
         });
-
+        if (callback) {
+            callback(null, clients.length ? clients[0] : false);
+        }
         return clients.length ? clients[0] : false;
-    };
+    }
 
     /**
      * Save token.
      */
 
-    saveToken  (token:any, client:any, user:any) {
-        let { accessToken, accessTokenExpiresAt, refreshTokenExpiresAt, refreshToken} = token;
+    async saveToken(token: Token, client: Client, user: User, callback?: Callback<Token>): Promise<Token> {
+        const { accessToken, accessTokenExpiresAt, refreshTokenExpiresAt, refreshToken } = token;
         this.tokens.push({
-            accessToken: accessToken,
-            accessTokenExpiresAt: accessTokenExpiresAt,
-            client: client,
-            refreshToken: refreshToken,
-            refreshTokenExpiresAt: refreshTokenExpiresAt,
-            user: user
+            accessToken,
+            accessTokenExpiresAt,
+            client,
+            refreshToken,
+            refreshTokenExpiresAt,
+            user,
         });
-        return this.tokens[this.tokens.length -1 ]
-    };
+        if (callback) {
+            callback(null, this.tokens[this.tokens.length - 1]);
+        }
+        return this.tokens[this.tokens.length - 1];
+    }
 
     /*
      * Get user.
      */
 
-    getUser  (username:string, password:string) {
-        var users = this.users.filter(function (user) {
+    async getUser(username: string, password: string): Promise<User | Falsey> {
+        const users = this.users.filter(function (user) {
             return user.username === username && user.password === password;
         });
 
         return users.length ? users[0] : false;
-    };
-
-    getUserFromClient(client:string){
-        return this.users[0]
     }
 
-    saveAuthorizationCode(){
-
+    async getUserFromClient(client: Client, callback?: Callback<Falsey | User>): Promise<Falsey | User> {
+        if (callback) {
+            callback(null, this.users[0]);
+        }
+        return this.users[0];
     }
 
-    revokeToken(token:any):boolean{
+    revokeToken(token: Token): boolean {
         return true;
     }
 
-    expireAllTokens(){
+    expireAllTokens(): void {
         for (const token of this.tokens) {
-            token.accessTokenExpiresAt = Date.now()
+            token.accessTokenExpiresAt = new Date(new Date().setHours(-1));
         }
     }
-
 }
